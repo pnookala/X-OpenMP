@@ -2312,11 +2312,18 @@ typedef struct kmp_base_thread_data {
   // Used only in __kmp_execute_tasks_template, maybe not avail until task is
   // queued?
   kmp_bootstrap_lock_t td_deque_lock; // Lock for accessing deque
+#ifdef KMP_USE_XQUEUE
+  volatile kmp_taskdata_t *
+      *td_deque;
+  volatile kmp_uint32 td_deque_head;
+  volatile kmp_uint32 td_deque_tail;
+#else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
-  kmp_int32 td_deque_size; // Size of deck
   kmp_uint32 td_deque_head; // Head of deque (will wrap)
   kmp_uint32 td_deque_tail; // Tail of deque (will wrap)
+#endif
+  kmp_int32 td_deque_size; // Size of deck
   kmp_int32 td_deque_ntasks; // Number of tasks in deque
   // GEH: shouldn't this be volatile since used in while-spin?
   kmp_int32 td_deque_last_stolen; // Thread number of last successful steal

@@ -127,7 +127,7 @@ static void __kmp_free_task_stack(kmp_int32 gtid,
     kmp_stack_block_t *next_block = (stack_block) ? stack_block->sb_next : NULL;
 
     stack_block->sb_next = NULL;
-    stack_block->sb_prev = NULL;
+    tack_block->sb_prev = NULL;
     if (stack_block != &task_stack->ts_first_block) {
       __kmp_thread_free(thread,
                         stack_block); // free the block, if not the first
