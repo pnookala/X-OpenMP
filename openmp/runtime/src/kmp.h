@@ -24,6 +24,8 @@
 
 /* Defines for OpenMP 3.0 tasking and auto scheduling */
 
+#define KMP_USE_XQUEUE 1
+
 #ifndef KMP_STATIC_STEAL_ENABLED
 #define KMP_STATIC_STEAL_ENABLED 1
 #endif
@@ -2303,6 +2305,14 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
 #endif
 }; // struct kmp_taskdata
 
+#ifdef KMP_USE_XQUEUE
+typedef struct kmp_taskq {
+  volatile kmp_taskdata_t **td_deque;
+  volatile kmp_uint32 td_deque_head;
+  volatile kmp_uint32 td_deque_tail;
+} kmp_taskq_t;
+#endif
+
 // Make sure padding above worked
 KMP_BUILD_ASSERT(sizeof(kmp_taskdata_t) % sizeof(void *) == 0);
 
@@ -2313,10 +2323,8 @@ typedef struct kmp_base_thread_data {
   // queued?
   kmp_bootstrap_lock_t td_deque_lock; // Lock for accessing deque
 #ifdef KMP_USE_XQUEUE
-  volatile kmp_taskdata_t *
-      *td_deque;
-  volatile kmp_uint32 td_deque_head;
-  volatile kmp_uint32 td_deque_tail;
+    kmp_taskq_t **td_task_q; //Queue for tasks
+    kmp_uint32 num_queues = 0; //Number of queues per worker
 #else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
@@ -2908,6 +2916,9 @@ extern size_t __kmp_align_alloc;
 /* following data protected by initialization routines */
 extern int __kmp_xproc; /* number of processors in the system */
 extern int __kmp_avail_proc; /* number of processors available to the process */
+#ifdef KMP_USE_XQUEUE
+extern int __kmp_num_task_queues; /* number of task queues per worker */
+#endif
 extern size_t __kmp_sys_min_stksize; /* system-defined minimum stack size */
 extern int __kmp_sys_max_nth; /* system-imposed maximum number of threads */
 // maximum total number of concurrently-existing threads on device

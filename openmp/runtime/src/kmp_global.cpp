@@ -130,6 +130,11 @@ int __kmp_tp_cached = 0;
 int __kmp_dispatch_num_buffers = KMP_DFLT_DISP_NUM_BUFF;
 int __kmp_dflt_max_active_levels = 1; // Nesting off by default
 bool __kmp_dflt_max_active_levels_set = false; // Don't override set value
+
+#ifdef KMP_USE_XQUEUE                                                                               
+int  __kmp_num_task_queues = 2; //Default is 2 to enable task distribution                   
+#endif 
+
 #if KMP_NESTED_HOT_TEAMS
 int __kmp_hot_teams_mode = 0; /* 0 - free extra threads when reduced */
 /* 1 - keep extra threads when reduced */
