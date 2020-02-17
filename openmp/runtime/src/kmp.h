@@ -2325,6 +2325,7 @@ typedef struct kmp_base_thread_data {
 #ifdef KMP_USE_XQUEUE
     kmp_taskq_t **td_task_q; //Queue for tasks
     kmp_uint32 num_queues = 0; //Number of queues per worker
+    kmp_int32 last_q; //Used for load balancing
 #else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
