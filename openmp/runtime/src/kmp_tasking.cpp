@@ -363,10 +363,6 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
     __kmp_enable_tasking(task_team, thread);
   }
  
-#ifdef KMP_USE_XQUEUE 
-  //__kmp_num_task_queues = task_team->tt.tt_nproc;
-#endif
-
   KMP_DEBUG_ASSERT(TCR_4(task_team->tt.tt_found_tasks) == TRUE);
   KMP_DEBUG_ASSERT(TCR_PTR(task_team->tt.tt_threads_data) != NULL);
 
@@ -394,7 +390,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   //This is possible because we want to distribute tasks to other thread's queues which may not be
   //initialized at this point.
   //This should never happen, but if it does, it will result in race condition.
-  if (TCR_4(target_thread_data->td.td_task_q) == NULL) {
+  /*if (TCR_4(target_thread_data->td.td_task_q) == NULL) {
     KA_TRACE(20, ("__kmp_push_task: T#%d deque not initialized; returning "
                   "TASK_NOT_PUSHED for task %p\n",
                   target_tid, taskdata));
@@ -403,7 +399,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
     //if (target_thread_data->td.td_task_q == NULL) {                                                          
       __kmp_alloc_task_q(__kmp_threads[target_tid], target_thread_data);                                                        
     //} 
-  }   
+  } */  
 
   if (TCR_4(target_thread_data->td.td_task_q[last_q]->td_deque[target_thread_data->td.td_task_q[last_q]->td_deque_head]))
 #else
@@ -411,15 +407,17 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
       TASK_DEQUE_SIZE(thread_data->td))
 #endif
   {
+#ifndef KMP_USE_XQUEUE
     if (__kmp_enable_task_throttling &&
         __kmp_task_is_allowed(gtid, __kmp_task_stealing_constraint, taskdata,
                               thread->th.th_current_task)) {
+#endif
       KA_TRACE(20, ("__kmp_push_task: T#%d deque is full; returning "
                     "TASK_NOT_PUSHED for task %p\n",
                     gtid, taskdata));
       return TASK_NOT_PUSHED;
-    } 
 #ifndef KMP_USE_XQUEUE
+    }
     else {
       __kmp_acquire_bootstrap_lock(&thread_data->td.td_deque_lock);
       locked = 1;
@@ -2665,13 +2663,13 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
             (thread_data->td.td_task_q[queue_id]->td_deque_tail + 1) 
             & TASK_DEQUE_MASK(thread_data->td);
 
+    *last_qid = queue_id & (thread_data->td.num_queues - 1);
+
     KA_TRACE(10, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
                 gtid, queue_id, taskdata, thread_data->td.td_task_q[queue_id]->td_deque_tail));
     break; //found a task, first execute it.
   }
-
-  *last_qid = *last_qid & thread_data->td.num_queues;
 
   if(taskdata == NULL) {
     return NULL;
@@ -3204,6 +3202,10 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   KMP_DEBUG_ASSERT(nthreads > 0);
   KMP_DEBUG_ASSERT(nthreads == this_thr->th.th_team->t.t_nproc);
 
+#ifdef KMP_USE_XQUEUE
+  __kmp_num_task_queues = task_team->tt.tt_nproc;
+#endif
+
   // Allocate or increase the size of threads_data if necessary
   is_init_thread = __kmp_realloc_task_threads_data(this_thr, task_team);
 
@@ -3399,7 +3401,6 @@ static int __kmp_realloc_task_threads_data(kmp_info_t *thread,
   threads_data_p = &task_team->tt.tt_threads_data;
   nthreads = task_team->tt.tt_nproc;
   maxthreads = task_team->tt.tt_max_threads;
-
   // All threads must lock when they encounter the first task of the implicit
   // task region to make sure threads_data fields are (re)initialized before
   // used.

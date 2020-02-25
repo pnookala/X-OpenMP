@@ -2342,7 +2342,7 @@ typedef struct kmp_base_thread_data {
 #endif // BUILD_TIED_TASK_STACK
 } kmp_base_thread_data_t;
 
-#define TASK_DEQUE_BITS 8 // Used solely to define INITIAL_TASK_DEQUE_SIZE
+#define TASK_DEQUE_BITS 4 // Used solely to define INITIAL_TASK_DEQUE_SIZE
 #define INITIAL_TASK_DEQUE_SIZE (1 << TASK_DEQUE_BITS)
 
 #define TASK_DEQUE_SIZE(td) ((td).td_deque_size)
