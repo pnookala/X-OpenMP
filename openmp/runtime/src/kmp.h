@@ -2306,6 +2306,77 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
 }; // struct kmp_taskdata
 
 #ifdef KMP_USE_XQUEUE
+
+typedef struct kmp_qstatus {
+  kmp_int64 q_status;
+union {
+  unsigned	char	q1:1;
+	unsigned	char	q2:1;
+	unsigned	char	q3:1;
+	unsigned	char	q4:1;
+	unsigned	char	q5:1;
+	unsigned	char	q6:1;
+	unsigned	char	q7:1;
+	unsigned	char	q8:1;
+	unsigned	char	q9:1;
+	unsigned	char	q10:1;
+	unsigned	char	q11:1;
+	unsigned	char	q12:1;
+	unsigned	char	q13:1;
+	unsigned	char	q14:1;
+	unsigned	char	q15:1;
+	unsigned	char	q16:1;
+	unsigned	char	q17:1;
+	unsigned	char	q18:1;
+	unsigned	char	q19:1;
+	unsigned	char	q20:1;
+	unsigned	char	q21:1;
+	unsigned	char	q22:1;
+	unsigned	char	q23:1;
+	unsigned	char	q24:1;
+	unsigned	char	q25:1;
+	unsigned	char	q26:1;
+	unsigned	char	q27:1;
+	unsigned	char	q28:1;
+	unsigned	char	q29:1;
+	unsigned	char	q30:1;
+	unsigned	char	q31:1;
+	unsigned	char	q32:1;
+	unsigned	char	q33:1;
+	unsigned	char	q34:1;
+	unsigned	char	q35:1;
+	unsigned	char	q36:1;
+	unsigned	char	q37:1;
+	unsigned	char	q38:1;
+	unsigned	char	q39:1;
+	unsigned	char	q40:1;
+	unsigned	char	q41:1;
+	unsigned	char	q42:1;
+	unsigned	char	q43:1;
+	unsigned	char	q44:1;
+	unsigned	char	q45:1;
+	unsigned	char	q46:1;
+	unsigned	char	q47:1;
+	unsigned	char	q48:1;
+	unsigned	char	q49:1;
+	unsigned	char	q50:1;
+	unsigned	char	q51:1;
+	unsigned	char	q52:1;
+	unsigned	char	q53:1;
+	unsigned	char	q54:1;
+	unsigned	char	q55:1;
+	unsigned	char	q56:1;
+	unsigned	char	q57:1;
+	unsigned	char	q58:1;
+	unsigned	char	q59:1;
+	unsigned	char	q60:1;
+	unsigned	char	q61:1;
+	unsigned	char	q62:1;
+	unsigned	char	q63:1;
+	unsigned	char	q64:1;
+  };
+} kmp_qstatus_t;
+
 typedef struct kmp_taskq {
   volatile kmp_taskdata_t **td_deque;
   volatile kmp_uint32 td_deque_head;
@@ -2325,7 +2396,8 @@ typedef struct kmp_base_thread_data {
 #ifdef KMP_USE_XQUEUE
     kmp_taskq_t **td_task_q; //Queue for tasks
     kmp_uint32 num_queues = 0; //Number of queues per worker
-    kmp_int32 last_q; //Used for load balancing
+    kmp_uint64 last_q; //Used for load balancing
+    kmp_uint64 q_status = 0;
 #else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
