@@ -452,7 +452,9 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 "task=%p head=%u last_q=%u\n",
                 gtid, target_tid, taskdata, target_thread_data->td.td_task_q[last_q]->td_deque_head,
                 thread_data->td.last_q));
-  thread_data->td.last_q = (thread_data->td.last_q + 1) & (thread_data->td.num_queues - 1);
+  
+  if (thread_data->td.num_queues > 1)
+    thread_data->td.last_q = (thread_data->td.last_q + 1) & (thread_data->td.num_queues - 1);
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
   thread_data->td.td_deque_tail = 
