@@ -6797,7 +6797,7 @@ static void __kmp_do_middle_initialize(void) {
   }
 
 #ifdef KMP_USE_XQUEUE
-  //__kmp_num_task_queues = __kmp_avail_proc;
+  __kmp_num_task_queues = 1; //__kmp_avail_proc;
 #endif
 
   // If there were empty places in num_threads list (OMP_NUM_THREADS=,,2,3),
