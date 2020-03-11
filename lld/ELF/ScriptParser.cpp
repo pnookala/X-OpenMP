@@ -108,7 +108,7 @@ private:
   Expr readConstant();
   Expr getPageSize();
 
-  uint64_t readMemoryAssignment(StringRef, StringRef, StringRef);
+  Expr readMemoryAssignment(StringRef, StringRef, StringRef);
   std::pair<uint32_t, uint32_t> readMemoryAttributes();
 
   Expr combine(StringRef op, Expr l, Expr r);
@@ -523,13 +523,6 @@ std::vector<BaseCommand *> ScriptParser::readOverlay() {
 }
 
 void ScriptParser::readSections() {
-  script->hasSectionsCommand = true;
-
-  // -no-rosegment is used to avoid placing read only non-executable sections in
-  // their own segment. We do the same if SECTIONS command is present in linker
-  // script. See comment for computeFlags().
-  config->singleRoRx = true;
-
   expect("{");
   std::vector<BaseCommand *> v;
   while (!errorCount() && !consume("}")) {
@@ -548,22 +541,29 @@ void ScriptParser::readSections() {
     else
       v.push_back(readOutputSectionDescription(tok));
   }
+  script->sectionCommands.insert(script->sectionCommands.end(), v.begin(),
+                                 v.end());
 
-  if (!atEOF() && consume("INSERT")) {
-    std::vector<BaseCommand *> *dest = nullptr;
-    if (consume("AFTER"))
-      dest = &script->insertAfterCommands[next()];
-    else if (consume("BEFORE"))
-      dest = &script->insertBeforeCommands[next()];
-    else
-      setError("expected AFTER/BEFORE, but got '" + next() + "'");
-    if (dest)
-      dest->insert(dest->end(), v.begin(), v.end());
+  if (atEOF() || !consume("INSERT")) {
+    // --no-rosegment is used to avoid placing read only non-executable sections
+    // in their own segment. We do the same if SECTIONS command is present in
+    // linker script. See comment for computeFlags().
+    // TODO This rule will be dropped in the future.
+    config->singleRoRx = true;
+
+    script->hasSectionsCommand = true;
     return;
   }
 
-  script->sectionCommands.insert(script->sectionCommands.end(), v.begin(),
-                                 v.end());
+  bool isAfter = false;
+  if (consume("AFTER"))
+    isAfter = true;
+  else if (!consume("BEFORE"))
+    setError("expected AFTER/BEFORE, but got '" + next() + "'");
+  StringRef where = next();
+  for (BaseCommand *cmd : v)
+    if (auto *os = dyn_cast<OutputSection>(cmd))
+      script->insertCommands.push_back({os, isAfter, where});
 }
 
 void ScriptParser::readTarget() {
@@ -597,10 +597,11 @@ static int precedence(StringRef op) {
 }
 
 StringMatcher ScriptParser::readFilePatterns() {
-  std::vector<StringRef> v;
+  StringMatcher Matcher;
+
   while (!errorCount() && !consume(")"))
-    v.push_back(next());
-  return StringMatcher(v);
+    Matcher.addPattern(SingleStringMatcher(next()));
+  return Matcher;
 }
 
 SortSectionPolicy ScriptParser::readSortKind() {
@@ -637,12 +638,12 @@ std::vector<SectionPattern> ScriptParser::readInputSectionsList() {
       excludeFilePat = readFilePatterns();
     }
 
-    std::vector<StringRef> v;
+    StringMatcher SectionMatcher;
     while (!errorCount() && peek() != ")" && peek() != "EXCLUDE_FILE")
-      v.push_back(unquote(next()));
+      SectionMatcher.addPattern(unquote(next()));
 
-    if (!v.empty())
-      ret.push_back({std::move(excludeFilePat), StringMatcher(v)});
+    if (!SectionMatcher.empty())
+      ret.push_back({std::move(excludeFilePat), std::move(SectionMatcher)});
     else
       setError("section pattern is expected");
   }
@@ -864,17 +865,17 @@ OutputSection *ScriptParser::readOutputSectionDescription(StringRef outSec) {
       // handle this case here as it will already have been matched by the
       // case above.
       auto *isd = make<InputSectionDescription>(tok);
-      isd->sectionPatterns.push_back({{}, StringMatcher({"*"})});
+      isd->sectionPatterns.push_back({{}, StringMatcher("*")});
       cmd->sectionCommands.push_back(isd);
     }
   }
 
   if (consume(">"))
-    cmd->memoryRegionName = next();
+    cmd->memoryRegionName = std::string(next());
 
   if (consume("AT")) {
     expect(">");
-    cmd->lmaRegionName = next();
+    cmd->lmaRegionName = std::string(next());
   }
 
   if (cmd->lmaExpr && !cmd->lmaRegionName.empty())
@@ -1301,7 +1302,7 @@ Expr ScriptParser::readPrimary() {
       setError("memory region not defined: " + name);
       return [] { return 0; };
     }
-    return [=] { return script->memoryRegions[name]->length; };
+    return script->memoryRegions[name]->length;
   }
   if (tok == "LOADADDR") {
     StringRef name = readParenLiteral();
@@ -1328,7 +1329,7 @@ Expr ScriptParser::readPrimary() {
       setError("memory region not defined: " + name);
       return [] { return 0; };
     }
-    return [=] { return script->memoryRegions[name]->origin; };
+    return script->memoryRegions[name]->origin;
   }
   if (tok == "SEGMENT_START") {
     expect("(");
@@ -1453,9 +1454,8 @@ void ScriptParser::readVersionDeclaration(StringRef verStr) {
   // as a parent. This version hierarchy is, probably against your
   // instinct, purely for hint; the runtime doesn't care about it
   // at all. In LLD, we simply ignore it.
-  if (peek() != ";")
-    skip();
-  expect(";");
+  if (next() != ";")
+    expect(";");
 }
 
 static bool hasWildcard(StringRef s) {
@@ -1519,14 +1519,14 @@ std::vector<SymbolVersion> ScriptParser::readVersionExtern() {
   return ret;
 }
 
-uint64_t ScriptParser::readMemoryAssignment(StringRef s1, StringRef s2,
-                                            StringRef s3) {
+Expr ScriptParser::readMemoryAssignment(StringRef s1, StringRef s2,
+                                        StringRef s3) {
   if (!consume(s1) && !consume(s2) && !consume(s3)) {
     setError("expected one of: " + s1 + ", " + s2 + ", or " + s3);
-    return 0;
+    return [] { return 0; };
   }
   expect("=");
-  return readExpr()().getValue();
+  return readExpr();
 }
 
 // Parse the MEMORY command as specified in:
@@ -1550,9 +1550,9 @@ void ScriptParser::readMemory() {
     }
     expect(":");
 
-    uint64_t origin = readMemoryAssignment("ORIGIN", "org", "o");
+    Expr origin = readMemoryAssignment("ORIGIN", "org", "o");
     expect(",");
-    uint64_t length = readMemoryAssignment("LENGTH", "len", "l");
+    Expr length = readMemoryAssignment("LENGTH", "len", "l");
 
     // Add the memory region to the region map.
     MemoryRegion *mr = make<MemoryRegion>(tok, origin, length, flags, negFlags);

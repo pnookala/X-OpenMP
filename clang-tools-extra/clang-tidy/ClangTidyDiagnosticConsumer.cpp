@@ -62,6 +62,9 @@ protected:
     }
     assert(Error.Message.Message.empty() && "Overwriting a diagnostic message");
     Error.Message = TidyMessage;
+    for (const CharSourceRange &SourceRange : Ranges) {
+      Error.Ranges.emplace_back(Loc.getManager(), SourceRange);
+    }
   }
 
   void emitDiagnosticLoc(FullSourceLoc Loc, PresumedLoc PLoc,
@@ -172,7 +175,7 @@ void ClangTidyContext::setSourceManager(SourceManager *SourceMgr) {
 }
 
 void ClangTidyContext::setCurrentFile(StringRef File) {
-  CurrentFile = File;
+  CurrentFile = std::string(File);
   CurrentOptions = getOptionsForFile(CurrentFile);
   CheckFilter = std::make_unique<CachedGlobList>(*getOptions().Checks);
   WarningAsErrorFilter =
@@ -202,7 +205,7 @@ ClangTidyOptions ClangTidyContext::getOptionsForFile(StringRef File) const {
 void ClangTidyContext::setEnableProfiling(bool P) { Profile = P; }
 
 void ClangTidyContext::setProfileStoragePrefix(StringRef Prefix) {
-  ProfilePrefix = Prefix;
+  ProfilePrefix = std::string(Prefix);
 }
 
 llvm::Optional<ClangTidyProfiling::StorageParams>
@@ -224,8 +227,8 @@ bool ClangTidyContext::treatAsError(StringRef CheckName) const {
 }
 
 std::string ClangTidyContext::getCheckName(unsigned DiagnosticID) const {
-  std::string ClangWarningOption =
-      DiagEngine->getDiagnosticIDs()->getWarningOptionForDiag(DiagnosticID);
+  std::string ClangWarningOption = std::string(
+      DiagEngine->getDiagnosticIDs()->getWarningOptionForDiag(DiagnosticID));
   if (!ClangWarningOption.empty())
     return "clang-diagnostic-" + ClangWarningOption;
   llvm::DenseMap<unsigned, std::string>::const_iterator I =
@@ -661,7 +664,7 @@ void ClangTidyDiagnosticConsumer::removeIncompatibleErrors() {
       for (const auto &Replace : FileAndReplace.second) {
         unsigned Begin = Replace.getOffset();
         unsigned End = Begin + Replace.getLength();
-        const std::string &FilePath = Replace.getFilePath();
+        const std::string &FilePath = std::string(Replace.getFilePath());
         // FIXME: Handle empty intervals, such as those from insertions.
         if (Begin == End)
           continue;

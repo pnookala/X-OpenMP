@@ -12,6 +12,23 @@ add_entrypoint_library(
     # sys/mman.h entrypoints
     mmap
     munmap
+
+    # signal.h entrypoints
+    raise
+    sigaddset
+    sigemptyset
+    sigprocmask
+
+    # stdlib.h entrypoints
+    _Exit
+    abort
+
+    # threads.h entrypoints
+    mtx_init
+    mtx_lock
+    mtx_unlock
+    thrd_create
+    thrd_join
 )
 
 add_entrypoint_library(

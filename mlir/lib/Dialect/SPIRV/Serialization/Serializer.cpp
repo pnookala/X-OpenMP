@@ -1,6 +1,6 @@
 //===- Serializer.cpp - MLIR SPIR-V Serialization -------------------------===//
 //
-// Part of the MLIR Project, under the Apache License v2.0 with LLVM Exceptions.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
@@ -112,8 +112,10 @@ public:
   /// Collects the final SPIR-V `binary`.
   void collect(SmallVectorImpl<uint32_t> &binary);
 
+#ifndef NDEBUG
   /// (For debugging) prints each value and its corresponding result <id>.
   void printValueIDMap(raw_ostream &os);
+#endif
 
 private:
   // Note that there are two main categories of methods in this class:
@@ -177,7 +179,7 @@ private:
   LogicalResult processName(uint32_t resultID, StringRef name);
 
   /// Processes a SPIR-V function op.
-  LogicalResult processFuncOp(FuncOp op);
+  LogicalResult processFuncOp(spirv::FuncOp op);
 
   LogicalResult processVariableOp(spirv::VariableOp op);
 
@@ -501,6 +503,7 @@ void Serializer::collect(SmallVectorImpl<uint32_t> &binary) {
   binary.append(functions.begin(), functions.end());
 }
 
+#ifndef NDEBUG
 void Serializer::printValueIDMap(raw_ostream &os) {
   os << "\n= Value <id> Map =\n\n";
   for (auto valueIDPair : valueIDMap) {
@@ -517,6 +520,7 @@ void Serializer::printValueIDMap(raw_ostream &os) {
     os << '\n';
   }
 }
+#endif
 
 //===----------------------------------------------------------------------===//
 // Module structure
@@ -678,7 +682,7 @@ Serializer::processMemberDecoration(uint32_t structID, uint32_t memberIndex,
 }
 } // namespace
 
-LogicalResult Serializer::processFuncOp(FuncOp op) {
+LogicalResult Serializer::processFuncOp(spirv::FuncOp op) {
   LLVM_DEBUG(llvm::dbgs() << "-- start function '" << op.getName() << "' --\n");
   assert(functionHeader.empty() && functionBody.empty());
 
@@ -928,8 +932,11 @@ Serializer::prepareBasicType(Location loc, Type type, uint32_t resultID,
 
     typeEnum = spirv::Opcode::OpTypeInt;
     operands.push_back(intType.getWidth());
-    // TODO(antiagainst): support unsigned integers
-    operands.push_back(1);
+    // SPIR-V OpTypeInt "Signedness specifies whether there are signed semantics
+    // to preserve or validate.
+    // 0 indicates unsigned, or no signedness semantics
+    // 1 indicates signed semantics."
+    operands.push_back(intType.isSigned() ? 1 : 0);
     return success();
   }
 
@@ -1638,7 +1645,7 @@ LogicalResult Serializer::processOperation(Operation *opInst) {
         return processBranchConditionalOp(op);
       })
       .Case([&](spirv::ConstantOp op) { return processConstantOp(op); })
-      .Case([&](FuncOp op) { return processFuncOp(op); })
+      .Case([&](spirv::FuncOp op) { return processFuncOp(op); })
       .Case([&](spirv::GlobalVariableOp op) {
         return processGlobalVariableOp(op);
       })
@@ -1764,12 +1771,9 @@ Serializer::processOp<spirv::FunctionCallOp>(spirv::FunctionCallOp op) {
   auto funcName = op.callee();
   uint32_t resTypeID = 0;
 
-  SmallVector<Type, 1> resultTypes(op.getResultTypes());
-  if (failed(processType(op.getLoc(),
-                         (resultTypes.empty() ? getVoidType() : resultTypes[0]),
-                         resTypeID))) {
+  Type resultTy = op.getNumResults() ? *op.result_type_begin() : getVoidType();
+  if (failed(processType(op.getLoc(), resultTy, resTypeID)))
     return failure();
-  }
 
   auto funcID = getOrCreateFunctionID(funcName);
   auto funcCallID = getNextID();
@@ -1781,9 +1785,8 @@ Serializer::processOp<spirv::FunctionCallOp>(spirv::FunctionCallOp op) {
     operands.push_back(valueID);
   }
 
-  if (!resultTypes.empty()) {
+  if (!resultTy.isa<NoneType>())
     valueIDMap[op.getResult(0)] = funcCallID;
-  }
 
   return encodeInstructionInto(functionBody, spirv::Opcode::OpFunctionCall,
                                operands);

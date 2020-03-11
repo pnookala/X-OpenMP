@@ -18,6 +18,7 @@
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/Module.h"
+#include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/None.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
@@ -50,7 +51,7 @@ std::string ExternalASTSource::ASTSourceDescriptor::getModuleName() const {
   if (ClangModule)
     return ClangModule->Name;
   else
-    return PCHModuleName;
+    return std::string(PCHModuleName);
 }
 
 void ExternalASTSource::FindFileRegionDecls(FileID File, unsigned Offset,

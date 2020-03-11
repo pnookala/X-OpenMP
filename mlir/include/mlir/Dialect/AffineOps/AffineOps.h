@@ -1,6 +1,6 @@
 //===- AffineOps.h - MLIR Affine Operations -------------------------------===//
 //
-// Part of the MLIR Project, under the Apache License v2.0 with LLVM Exceptions.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
@@ -19,6 +19,7 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/StandardTypes.h"
+#include "mlir/Interfaces/SideEffects.h"
 #include "mlir/Transforms/LoopLikeInterface.h"
 
 namespace mlir {
@@ -72,6 +73,9 @@ public:
   AffineMap getAffineMap() {
     return getAttrOfType<AffineMapAttr>("map").getValue();
   }
+
+  /// Returns the affine value map computed from this operation.
+  AffineValueMap getAffineValueMap();
 
   /// Returns true if the result of this operation can be used as dimension id.
   bool isValidDim();
@@ -528,6 +532,7 @@ bool isValidSymbol(Value value);
 /// 4. propagate constant operands and drop them
 void canonicalizeMapAndOperands(AffineMap *map,
                                 SmallVectorImpl<Value> *operands);
+
 /// Canonicalizes an integer set the same way canonicalizeMapAndOperands does
 /// for affine maps.
 void canonicalizeSetAndOperands(IntegerSet *set,
@@ -572,9 +577,6 @@ class AffineBound {
 public:
   AffineForOp getAffineForOp() { return op; }
   AffineMap getMap() { return map; }
-
-  /// Returns an AffineValueMap representing this bound.
-  AffineValueMap getAsAffineValueMap();
 
   unsigned getNumOperands() { return opEnd - opStart; }
   Value getOperand(unsigned idx) { return op.getOperand(opStart + idx); }
@@ -653,6 +655,10 @@ private:
   SmallVector<Value, 8> reorderedDims;
   SmallVector<Value, 8> concatenatedSymbols;
 
+  /// The number of symbols in concatenated symbols that belong to the original
+  /// map as opposed to those concatendated during map composition.
+  unsigned numProperSymbols;
+
   AffineMap affineMap;
 
   /// Used with RAII to control the depth at which AffineApply are composed
@@ -666,7 +672,7 @@ private:
   }
   static constexpr unsigned kMaxAffineApplyDepth = 1;
 
-  AffineApplyNormalizer() { affineApplyDepth()++; }
+  AffineApplyNormalizer() : numProperSymbols(0) { affineApplyDepth()++; }
 
 public:
   ~AffineApplyNormalizer() { affineApplyDepth()--; }

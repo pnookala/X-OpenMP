@@ -27,6 +27,9 @@ def NullMacro : MacroDef<"NULL"> {
 
 def ErrnoMacro : MacroDef<"errno"> {
   let Defn = [{
+    #ifdef __cplusplus
+    extern "C"
+    #endif
     int *__errno_location();
     #define errno (*__errno_location())
   }];
@@ -84,6 +87,13 @@ def StdIOAPI : PublicAPI<"stdio.h"> {
   ];
 }
 
+def StdlibAPI : PublicAPI<"stdlib.h"> {
+  let Functions = [
+    "_Exit",
+    "abort",
+  ];
+}
+
 def ErrnoAPI : PublicAPI<"errno.h"> {
   let Macros = [
     ErrnoMacro,
@@ -131,5 +141,53 @@ def SysMManAPI : PublicAPI<"sys/mman.h"> {
   let Functions = [
     "mmap",
     "munmap",
+  ];
+}
+
+def SignalAPI : PublicAPI<"signal.h"> {
+  let Functions = [
+    "raise",
+    "sigprocmask",
+    "sigemptyset",
+    "sigaddset",
+  ];
+}
+
+def MtxT : TypeDecl<"mtx_t"> {
+  let Decl = [{
+    typedef struct {
+      unsigned char __internal_data[4];
+      int __mtx_type;
+    } mtx_t;
+  }];
+}
+
+def ThreadStartT : TypeDecl<"thrd_start_t"> {
+  let Decl = "typedef int (*thrd_start_t)(void *);";
+}
+
+def ThreadsAPI : PublicAPI<"threads.h"> {
+  let TypeDeclarations = [
+    MtxT,
+    ThreadStartT,
+  ];
+
+  let Enumerations = [
+    "mtx_plain",
+    "mtx_recursive",
+    "mtx_timed",
+    "thrd_timedout",
+    "thrd_success",
+    "thrd_busy",
+    "thrd_error",
+    "thrd_nomem",
+  ];
+
+  let Functions = [
+    "mtx_init",
+    "mtx_lock",
+    "mtx_unlock",
+    "thrd_create",
+    "thrd_join",
   ];
 }
