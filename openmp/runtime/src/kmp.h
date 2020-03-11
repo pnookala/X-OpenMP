@@ -2327,7 +2327,6 @@ typedef struct kmp_base_thread_data {
     kmp_taskq_t **td_task_q; //Queue for tasks
     kmp_uint32 num_queues = 0; //Number of queues per worker
     kmp_uint64 last_q; //Used for load balancing
-    //kmp_uint64 q_status = 0; //This corresponds to all queues where this thread is a Producer. 
 #else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
