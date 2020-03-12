@@ -2635,70 +2635,19 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
                    NULL); // Caller should check this condition
 
   thread_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)];
-
-  for (kmp_uint64 queue_id = *last_qid; queue_id < thread_data->td.num_queues; queue_id++) 
+   
+  for (kmp_uint64 queue_id = gtid; queue_id > 0; queue_id--)
+  //for (kmp_uint64 queue_id = *last_qid; queue_id < thread_data->td.num_queues; queue_id++)
   {
-    // START - This whole block is the logic to find a queue which has tasks.
-    //Check how many instructions/cycles it takes compared to number of queues per thread.
-    /*kmp_uint64 queue_id = -1;
-    while(queue_id < 0) 
-    {
-      kmp_int32 kth_queue = 1;
-      kmp_int32 start = (gtid + kth_queue) % task_team->tt.tt_nproc;
-
-      for (kmp_int32 th = start; th < task_team->tt.tt_nproc; th++, kth_queue++) 
-      {
-        status_thread_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(th)];
-        //(n & (1 << (k - 1))) ---- is kth bit set in n? 
-        if (status_thread_data->td.q_status & (1 << (kth_queue - 1))) {
-          queue_id = kth_queue;
-          break;
-        }
-      }
-      
-      if (queue_id < 0)
-      {
-        for (kmp_int32 th = 0; th < start - 1; th++, kth_queue++)
-        {
-          status_thread_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(th)];
-          //(n & (1 << (k - 1))) ---- is kth bit set in n?
-          if (status_thread_data->td.q_status & (1 << (kth_queue - 1))) {
-            queue_id = kth_queue;
-            break;
-          }
-        } 
-      } 
-    }*/
-    // END
-    //kmp_uint64 queue_id = __builtin_ffs(thread_data->td.q_status) - 1;
-
-    //if (queue_id > 0 && queue_id < thread_data->td.num_queues) 
-    //{
-      kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id]; 
+      kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id];
       if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL)
       {
-        //KA_TRACE(1, ("__kmp_remove_aux_task(exit #1): T#%d:Q#%d No tasks to remove, q_status=%u\n "
-        //    ,gtid, queue_id, thread_data->td.q_status)); //, thread_data->td.td_task_q[0]->td_deque_head,
-        //continue;
-      //}
-    
         KA_TRACE(1, ("__kmp_remove_aux_task T#%d queue_id=%d\n", gtid, queue_id));
-    
+
         taskdata = (kmp_taskdata_t *) task_q->td_deque[task_q->td_deque_tail];
         task_q->td_deque[task_q->td_deque_tail] = NULL;
         task_q->td_deque_tail = (task_q->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
-        
-        //Update the q_status in the status_thread, this is not thread safe, 
-        //since enqueuer and dequeuer are different. How do we handle this?
-        /*if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) == NULL)
-        {
-          bool success = false;
-          while(!success && TCR_4(task_q->td_deque[task_q->td_deque_tail]) == NULL) {
-            kmp_uint64 status = status_thread_data->td.q_status;
-            success = __sync_bool_compare_and_swap(&status_thread_data->td.q_status, status,
-                        (__sync_and_and_fetch(&status_thread_data->td.q_status, ~((kmp_uint64)pow(2, queue_id)))));
-          }
-        }*/
+
         *last_qid = queue_id & (thread_data->td.num_queues - 1);
         KA_TRACE(1, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
@@ -2706,6 +2655,27 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         break; //found a task, first execute it.
       }
    }
+
+  if (taskdata == NULL) {
+    for (kmp_uint64 queue_id = (thread_data->td.num_queues - 1); queue_id > gtid; queue_id--)
+    {
+        kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id];
+      if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL)
+      {
+        KA_TRACE(1, ("__kmp_remove_aux_task T#%d queue_id=%d\n", gtid, queue_id));
+
+        taskdata = (kmp_taskdata_t *) task_q->td_deque[task_q->td_deque_tail];
+        task_q->td_deque[task_q->td_deque_tail] = NULL;
+        task_q->td_deque_tail = (task_q->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
+
+        *last_qid = queue_id & (thread_data->td.num_queues - 1);
+        KA_TRACE(1, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
+                "tail=%u\n",
+                gtid, queue_id, taskdata, task_q->td_deque_tail));
+        break; //found a task, first execute it.
+      }
+    }
+  }
 
   if(taskdata == NULL) {
     return NULL;
