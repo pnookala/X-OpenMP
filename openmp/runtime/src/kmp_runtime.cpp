@@ -6796,6 +6796,9 @@ static void __kmp_do_middle_initialize(void) {
     __kmp_avail_proc = __kmp_xproc;
   }
 
+//#ifdef KMP_USE_XQUEUE
+//  __kmp_num_task_queues = __kmp_avail_proc;
+//#endif
   // If there were empty places in num_threads list (OMP_NUM_THREADS=,,2,3),
   // correct them now
   j = 0;

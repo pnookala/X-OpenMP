@@ -453,8 +453,9 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 gtid, target_tid, taskdata, target_thread_data->td.td_task_q[last_q]->td_deque_head,
                 thread_data->td.last_q));
   
-  if (thread_data->td.num_queues > 1)
+  if (thread_data->td.num_queues > 1) {
     thread_data->td.last_q = (thread_data->td.last_q + 1) & (thread_data->td.num_queues - 1);
+  }
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
   thread_data->td.td_deque_tail = 
@@ -2961,7 +2962,7 @@ static inline int __kmp_execute_tasks_template(
                       tid = thread->th.th_info.ds.ds_tid;
 
 #ifdef KMP_USE_XQUEUE
-  kmp_uint64 last_qid = 1;
+  kmp_uint64 last_qid = gtid;
 #endif
 
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
@@ -3217,7 +3218,7 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   KMP_DEBUG_ASSERT(nthreads == this_thr->th.th_team->t.t_nproc);
 
 #ifdef KMP_USE_XQUEUE
-  __kmp_num_task_queues = 1; //task_team->tt.tt_nproc;
+  __kmp_num_task_queues = task_team->tt.tt_nproc;
 #endif
 
   // Allocate or increase the size of threads_data if necessary
