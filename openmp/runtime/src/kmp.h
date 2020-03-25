@@ -24,7 +24,7 @@
 
 /* Defines for OpenMP 3.0 tasking and auto scheduling */
 
-#define KMP_USE_XQUEUE 1
+//#define KMP_USE_XQUEUE 1
 
 #ifndef KMP_STATIC_STEAL_ENABLED
 #define KMP_STATIC_STEAL_ENABLED 1
@@ -2311,6 +2311,7 @@ typedef struct kmp_taskq {
   volatile kmp_taskdata_t **td_deque;
   volatile kmp_uint32 td_deque_head;
   volatile kmp_uint32 td_deque_tail;
+  //bool has_items = false;
 } kmp_taskq_t;
 #endif
 
@@ -2325,8 +2326,9 @@ typedef struct kmp_base_thread_data {
   kmp_bootstrap_lock_t td_deque_lock; // Lock for accessing deque
 #ifdef KMP_USE_XQUEUE
     kmp_taskq_t **td_task_q; //Queue for tasks
-    kmp_uint32 num_queues = 0; //Number of queues per worker
+    kmp_uint32 num_queues; //Number of queues per worker
     kmp_uint64 last_q; //Used for load balancing
+		bool is_second_order = false;
 #else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
