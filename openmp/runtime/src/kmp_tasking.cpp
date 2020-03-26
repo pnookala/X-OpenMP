@@ -374,10 +374,17 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   kmp_uint64 last_q = thread_data->td.last_q;
   kmp_int32 target_tid = (gtid + last_q) & (task_team->tt.tt_nproc - 1); //gtid;
   kmp_thread_data_t *target_thread_data = &task_team->tt.tt_threads_data[target_tid]; //thread_data;
+	
+	/*if (!target_thread_data->td.is_allocated) {
+		last_q = 0;
+		target_tid = gtid;
+		target_thread_data = thread_data;	
+	}*/
 
 	if (thread_data->td.td_task_q == NULL) {
     __kmp_alloc_task_q(thread, thread_data);
-  }
+  	//thread_data->td.is_allocated = true;
+	}
 #else
   // No lock needed since only owner can allocate
   if (thread_data->td.td_deque == NULL) {
@@ -458,12 +465,6 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 thread_data->td.last_q));
   
   if (thread_data->td.num_queues > 1) {
-		/*if (!thread_data->td.is_second_order && thread_data->td.last_q == thread_data->td.num_queues - 1)
-			thread_data->td.is_second_order = true;
-
-		if (thread_data->td.is_second_order)
-			thread_data->td.last_q = __kmp_get_random(thread) % (thread_data->td.num_queues - 1);	
-		else*/
 			thread_data->td.last_q = (thread_data->td.last_q + 1) & (thread_data->td.num_queues - 1);
 	}
 #else
@@ -1274,7 +1275,8 @@ kmp_task_t *__kmp_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
 #ifdef KMP_USE_XQUEUE                                                                               
       if (thread_data->td.td_task_q == NULL) {                                                          
         __kmp_alloc_task_q(thread, thread_data);                                                        
-      }                                                                                                 
+     		//thread_data->td.is_allocated = true; 
+			}                                                                                                 
 #else                                                                                               
       // No lock needed since only owner can allocate                                                   
       if (thread_data->td.td_deque == NULL) {                                                           
@@ -2647,6 +2649,9 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 
   thread_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)];
  
+	//if (!thread_data->td.is_allocated)
+	//	return NULL;
+
 	//for (kmp_uint64 queue_id = *last_qid; queue_id < thread_data->td.num_queues; queue_id++) 
   for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
   {
@@ -2672,7 +2677,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 					}
 				}*/
 
-        *last_qid = (queue_id + 1) & (thread_data->td.num_queues - 1);
+        *last_qid = (queue_id);// & (thread_data->td.num_queues - 1);
         KA_TRACE(1, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
                 gtid, queue_id, taskdata, task_q->td_deque_tail));
@@ -2704,7 +2709,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
             __sync_bool_compare_and_swap(&task_q->has_items, 0, 1);
         }*/
 
-        *last_qid = (queue_id + 1) & (thread_data->td.num_queues - 1);
+        *last_qid = (queue_id);// & (thread_data->td.num_queues - 1);
       	KA_TRACE(1, ("__kmp_remove_aux_task(exit #3): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
                 gtid, queue_id, taskdata, task_q->td_deque_tail));
@@ -2748,7 +2753,13 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
                 thread_data->td.td_deque_head, thread_data->td.td_deque_tail));
 #endif
 #ifdef KMP_USE_XQUEUE
-  if (TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
+  /*if (!thread_data->td.is_allocated)
+	{
+		__kmp_alloc_task_q(thread, thread_data);
+    thread_data->td.is_allocated = true;
+	}*/
+
+	if (TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
           == NULL) 
   {
 		//No double checking required here since same there is the producer.
@@ -3385,7 +3396,7 @@ static void __kmp_alloc_task_deque(kmp_info_t *thread,
   KMP_DEBUG_ASSERT(thread_data->td.td_deque_head == 0);
   KMP_DEBUG_ASSERT(thread_data->td.td_deque_tail == 0);
 
-  KE_TRACE(
+  KA_TRACE(
       10,
       ("__kmp_alloc_task_deque: T#%d allocating deque[%d] for thread_data %p\n",
        __kmp_gtid_from_thread(thread), INITIAL_TASK_DEQUE_SIZE, thread_data));
