@@ -2799,14 +2799,31 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
     taskdata = (kmp_taskdata_t *)thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail];
     thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail] = NULL;
     thread_data->td.td_task_q[0]->td_deque_tail = (thread_data->td.td_task_q[0]->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
-    if (TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
-          == NULL)
-    {
+    //if (TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
+    //      == NULL)
+    //{
       //It is safe to change here, since this thread is also the enqueuer, so no pending enqueues.
       //__sync_bool_compare_and_swap(&thread_data->td.q_mask, thread_data->td.q_mask, 
       //    thread_data->td.q_mask & -2);
 			//__sync_bool_compare_and_swap(&thread_data->td.td_task_q[0]->has_items, 1, 0);
-    }
+    //}
+	
+		if (thread_data->td.steal_req_id != -1 &&  
+				(( thread_data->td.steal_req_id & ((1 << 40) -1)) == thread_data->td.round) && 
+				TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
+          != NULL)
+		{
+			kmp_uint64 stealer_id = (thread_data->td.steal_req_id >> 40);
+			kmp_thread_data_t *stealer_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(stealer_id)];	
+			kmp_taskdata_t* stolen_task = (kmp_taskdata_t *)thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail];
+
+			if (__kmp_task_is_allowed(gtid, is_constrained, taskdata, thread->th.th_current_task)) {
+				stealer_data->td.stolen_task = stolen_task;	
+				thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail] = NULL;
+    		thread_data->td.td_task_q[0]->td_deque_tail = (thread_data->td.td_task_q[0]->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
+				thread_data->td.round++;
+			}
+		} 
 
     KA_TRACE(1, ("__kmp_remove_my_task(exit #4): T#%d:Q#0 %p removed: "
                 "tail=%u\n",
@@ -2853,7 +2870,6 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
                                     std::atomic<kmp_int32> *unfinished_threads,
                                     int *thread_finished,
                                     kmp_int32 is_constrained) {
-#ifndef KMP_USE_XQUEUE
   kmp_task_t *task;
   kmp_taskdata_t *taskdata;
   kmp_taskdata_t *current;
@@ -2869,6 +2885,7 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
   victim_tid = victim_thr->th.th_info.ds.ds_tid;
   victim_td = &threads_data[victim_tid];
 
+#ifndef KMP_USE_XQUEUE
   KA_TRACE(10, ("__kmp_steal_task(enter): T#%d try to steal from T#%d: "
                 "task_team=%p ntasks=%d head=%u tail=%u\n",
                 gtid, __kmp_gtid_from_thread(victim_thr), task_team,
@@ -2977,7 +2994,23 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
   task = KMP_TASKDATA_TO_TASK(taskdata);
   return task;
 #else
-  return NULL;
+	KA_TRACE(10, ("__kmp_steal_task(enter): T#%d try to steal from T#%d: "
+                "task_team=%p\n",
+                gtid, __kmp_gtid_from_thread(victim_thr), task_team));
+
+	kmp_thread_data_t *thread_data = &threads_data[gtid];
+	kmp_uint64 round = victim_td->td.round;
+	victim_td->td.steal_req_id = round + ( gtid << 40);	
+  while (victim_td->td.round == round) {
+		
+		if (thread_data->td.stolen_task != NULL) {
+			taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task;
+			task = KMP_TASKDATA_TO_TASK(taskdata);
+			thread_data->td.round++;
+			return task;
+		}
+	}
+	return NULL;
 #endif
 }
 
@@ -3034,13 +3067,13 @@ static inline int __kmp_execute_tasks_template(
       if (use_own_tasks) { // check on own queue first
         task = __kmp_remove_my_task(thread, gtid, task_team, is_constrained);
       }
-#ifdef KMP_USE_XQUEUE
+/*#ifdef KMP_USE_XQUEUE
       if ((task == NULL) && (threads_data->td.num_queues > 1)) {
         use_own_tasks = 0;
         
         task = __kmp_remove_aux_task(thread, gtid, task_team, is_constrained, &last_qid); 
       }
-#else
+#else*/
       if ((task == NULL) && (nthreads > 1)) { // Steal a task
         int asleep = 1;
         use_own_tasks = 0;
@@ -3110,7 +3143,7 @@ static inline int __kmp_execute_tasks_template(
           victim_tid = -2; // no successful victim found
         }
       }
-#endif
+//#endif
 
       if (task == NULL) // break out of tasking loop
         break;
@@ -3261,7 +3294,7 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   KMP_DEBUG_ASSERT(nthreads == this_thr->th.th_team->t.t_nproc);
 
 #ifdef KMP_USE_XQUEUE
-  __kmp_num_task_queues = task_team->tt.tt_nproc;
+  __kmp_num_task_queues = 1; //task_team->tt.tt_nproc;
 #endif
 
   // Allocate or increase the size of threads_data if necessary
