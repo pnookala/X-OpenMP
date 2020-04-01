@@ -1919,7 +1919,9 @@ static kmp_int32 __kmpc_omp_taskwait_template(ident_t *loc_ref, kmp_int32 gtid,
                              &(taskdata->td_incomplete_child_tasks)),
                        0U);
       while (KMP_ATOMIC_LD_ACQ(&taskdata->td_incomplete_child_tasks) != 0) {
-        flag.execute_tasks(thread, gtid, FALSE,
+        KA_TRACE(1, ("__kmpc_omp_taskwait: T#%d task %p still waiting\n",
+										gtid, taskdata));
+				flag.execute_tasks(thread, gtid, FALSE,
                            &thread_finished USE_ITT_BUILD_ARG(itt_sync_obj),
                            __kmp_task_stealing_constraint);
       }
@@ -2763,8 +2765,8 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
 	if (TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
           == NULL) 
   {
-		//Increment round number so if a thread is waiting, it will come out of the wait.
-		thread_data->td.round++;
+			//Increment round number so if a thread is waiting, it will come out of the wait.
+			thread_data->td.round++;
 		//No double checking required here since same there is the producer.
 			//__sync_bool_compare_and_swap(&thread_data->td.td_task_q[0]->has_items, 1, 0);
       KA_TRACE(1, ("__kmp_remove_my_task(exit #1): T#%d:Q#0 No tasks to remove\n "
@@ -2816,7 +2818,13 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
                 "tail=%u, round=%d\n",
                 gtid, taskdata, thread_data->td.td_task_q[0]->td_deque_tail, thread_data->td.round));
 
-		if ((( thread_data->td.steal_req_id & (((kmp_uint64)1 << 40) - (kmp_uint64)1)) == thread_data->td.round))
+		kmp_uint64 steal_req_id = thread_data->td.steal_req_id & (((kmp_uint64)1 << 40) - 1);
+		KA_TRACE(1, ("__kmp_remove_my_task(exit #4): T#%d:Q#0 %p removed: "
+                "tail=%u, round=%d, extracted_round=%d, steal_req_id=%d\n",
+                gtid, taskdata, thread_data->td.td_task_q[0]->td_deque_tail, thread_data->td.round,
+								steal_req_id, thread_data->td.steal_req_id));
+		if ((steal_req_id == thread_data->td.round)
+					&& thread_data->td.stolen_task == NULL)
 		{
 			 if(TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
           != NULL)
@@ -2830,6 +2838,9 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
 					stealer_data->td.stolen_task = stolen_task;	
 					thread_data->td.td_task_q[0]->td_deque[tail] = NULL;
     			thread_data->td.td_task_q[0]->td_deque_tail = (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
+					KA_TRACE(1, ("__kmp_remove_my_task(exit #4): T#%d:Q#0 %p copied to stolen_task: "
+                "tail=%u, round=%d\n",
+                gtid, stolen_task, thread_data->td.td_task_q[0]->td_deque_tail, thread_data->td.round));
 				}
 			/*else {
 					if (!task_team->tt.tt_untied_task_encountered) {
@@ -2841,10 +2852,9 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
     			}
 				}*/
 			}
+			thread_data->td.round++;
 		}
 		
-		thread_data->td.round++; 
-
   if(taskdata == NULL) {
     return NULL;
   }
@@ -3019,37 +3029,45 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
                 "task_team=%p, round=%d\n",
                 gtid, __kmp_gtid_from_thread(victim_thr), task_team, victim_td->td.round));
 	
-	if (( victim_td->td.steal_req_id  & (((kmp_uint64)1 << 40) - (kmp_uint64)1)) < victim_td->td.round)
+	if (( victim_td->td.steal_req_id  & (((kmp_uint64)1 << 40) - 1)) < victim_td->td.round)
 	{
 		kmp_uint64 round = victim_td->td.round;
 		victim_td->td.steal_req_id = round + ( (kmp_uint64)gtid << 40);	
-  	while ((victim_td->td.round == round)) {
+  	while (round == (kmp_uint64)victim_td->td.round) {
 			//Send request again if needed
 			//if (( victim_td->td.steal_req_id  & (((kmp_uint64)1 << 40) - (kmp_uint64)1)) < round)
 			//	victim_td->td.steal_req_id = round + ( (kmp_uint64)gtid << 40);
 
 			if (thread_data->td.stolen_task != NULL) {
 				taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task;
+				thread_data->td.stolen_task = NULL;
 				KMP_COUNT_BLOCK(TASK_stolen);
 				task = KMP_TASKDATA_TO_TASK(taskdata);
-				thread_data->td.round++;
-				thread_data->td.stolen_task = NULL;
-				KA_TRACE(1, ("__kmp_steal_task(enter): T#%d stole task %p: "
+				thread_data->td.round++; //To accept queries
+				KA_TRACE(1, ("__kmp_steal_task(exit): T#%d stole task %p: "
                 "task_team=%p round=%d\n",
                 gtid, taskdata, task_team, thread_data->td.round));
 				return task;
 			}
 	
-			if (*thread_finished) 
+			/*if (*thread_finished)
+			{ 
+				thread_data->td.round++;	
+				//KMP_ASSERT(thread_data->td.stolen_task == NULL);
 				break;
+			}*/
 			//While waiting, do not allow other threads to put steal request to this thread.
 			int self_r = thread_data->td.round;
-			kmp_uint64 self_query = self_r + ( gtid << 40);
+			kmp_uint64 self_query = self_r + ( (kmp_uint64)gtid << 40);
 			if (thread_data->td.steal_req_id != self_query) {
 				thread_data->td.steal_req_id = self_query;
 				thread_data->td.round++;
 			}
 		}
+		KA_TRACE(1, ("__kmp_steal_task(exit): T#%d could not steal from T#%d: "
+                "task_team=%p saved_round=%d victim_round=%d\n",
+                gtid, __kmp_gtid_from_thread(victim_thr), task_team, round,
+								victim_td->td.round));
 	}
 	return NULL;
 #endif
@@ -3435,6 +3453,8 @@ static void __kmp_alloc_task_q(kmp_info_t *thread,
     thread_data->td.num_queues = __kmp_num_task_queues;
     
   thread_data->td.last_q = 0; //initialize to self for task distribution  
+	thread_data->td.stolen_task = NULL;
+	thread_data->td.steal_req_id = 0;
 
   KA_TRACE(10, ("__kmp_alloc_task_q: T#%d allocating deques[%d,%d] for thread_data %p\n",
           __kmp_gtid_from_thread(thread), __kmp_num_task_queues, INITIAL_TASK_DEQUE_SIZE,
@@ -3609,6 +3629,8 @@ static int __kmp_realloc_task_threads_data(kmp_info_t *thread,
 #ifdef KMP_USE_XQUEUE
       if (thread_data->td.td_task_q == NULL)
         __kmp_alloc_task_q(team->t.t_threads[i], thread_data);
+			
+			thread_data->td.round = task_team->tt.tt_nproc + 1;
 #endif
 
       if (thread_data->td.td_deque_last_stolen >= nthreads) {
