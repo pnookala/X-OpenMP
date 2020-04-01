@@ -3050,12 +3050,6 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 				return task;
 			}
 	
-			/*if (*thread_finished)
-			{ 
-				thread_data->td.round++;	
-				//KMP_ASSERT(thread_data->td.stolen_task == NULL);
-				break;
-			}*/
 			//While waiting, do not allow other threads to put steal request to this thread.
 			int self_r = thread_data->td.round;
 			kmp_uint64 self_query = self_r + ( (kmp_uint64)gtid << 40);
@@ -3283,7 +3277,7 @@ static inline int __kmp_execute_tasks_template(
             15,
             ("__kmp_execute_tasks_template: T#%d spin condition satisfied\n",
              gtid));
-        return TRUE;
+				return TRUE;
       }
     }
 
