@@ -3345,7 +3345,7 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   KMP_DEBUG_ASSERT(nthreads == this_thr->th.th_team->t.t_nproc);
 
 #ifdef KMP_USE_XQUEUE
-  __kmp_num_task_queues = 8; //task_team->tt.tt_nproc;
+  __kmp_num_task_queues = 1; //task_team->tt.tt_nproc;
 #endif
 
   // Allocate or increase the size of threads_data if necessary

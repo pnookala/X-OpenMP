@@ -5414,11 +5414,11 @@ void __kmp_free_team(kmp_root_t *root,
             break;
           }
 #endif
-//#ifdef KMP_USE_XQUEUE
-//  				kmp_int32 gtid = __kmp_get_gtid();
+#ifdef KMP_USE_XQUEUE
+  				kmp_int32 gtid = __kmp_get_gtid();
   				//Hack to terminate any threads waiting to steal
-//  				team->t.t_threads[gtid]->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
-//#endif
+  				team->t.t_threads[gtid]->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
+#endif
 	        // first check if thread is sleeping
           kmp_flag_64 fl(&th->th.th_bar[bs_forkjoin_barrier].bb.b_go, th);
           if (fl.is_sleeping())
