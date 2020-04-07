@@ -5401,7 +5401,17 @@ void __kmp_free_team(kmp_root_t *root,
   if (!use_hot_team) {
     if (__kmp_tasking_mode != tskm_immediate_exec) {
       // Wait for threads to reach reapable state
-      for (f = 1; f < team->t.t_nproc; ++f) {
+#ifdef KMP_USE_XQUEUE
+#ifdef KMP_USE_LL_WORKSTEALING
+			//Hack to terminate any threads waiting to steal
+			for (f = 0; f < team->t.t_nproc; f++) {
+				kmp_info_t *th = team->t.t_threads[f];
+				//if (th->th.th_task_team != NULL)
+          th->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(f)].td.round++;
+			}
+#endif
+#endif
+			for (f = 1; f < team->t.t_nproc; ++f) {
         KMP_DEBUG_ASSERT(team->t.t_threads[f]);
         kmp_info_t *th = team->t.t_threads[f];
         volatile kmp_uint32 *state = &th->th.th_reap_state;
@@ -5414,16 +5424,11 @@ void __kmp_free_team(kmp_root_t *root,
             break;
           }
 #endif
-//#ifdef KMP_USE_XQUEUE
-//  				kmp_int32 gtid = __kmp_get_gtid();
-  				//Hack to terminate any threads waiting to steal
-//  				team->t.t_threads[gtid]->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
-//#endif
 	        // first check if thread is sleeping
           kmp_flag_64 fl(&th->th.th_bar[bs_forkjoin_barrier].bb.b_go, th);
           if (fl.is_sleeping())
             fl.resume(__kmp_gtid_from_thread(th));
-          KMP_CPU_PAUSE();
+					KMP_CPU_PAUSE();
         }
       }
 

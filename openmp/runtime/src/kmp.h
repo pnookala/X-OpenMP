@@ -24,8 +24,9 @@
 
 /* Defines for OpenMP 3.0 tasking and auto scheduling */
 
-//#define KMP_USE_XQUEUE 1
-//#define KMP_USE_LL_WORKSTEALING 1
+#define KMP_USE_XQUEUE 1
+#define KMP_USE_LL_WORKSTEALING 1
+#define KMP_WS_STEAL_TWO 1
 
 #ifndef KMP_STATIC_STEAL_ENABLED
 #define KMP_STATIC_STEAL_ENABLED 1
