@@ -2799,14 +2799,14 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
     taskdata = (kmp_taskdata_t *)thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail];
     thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail] = NULL;
     thread_data->td.td_task_q[0]->td_deque_tail = (thread_data->td.td_task_q[0]->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
-    if (TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
-          == NULL)
-    {
+    //if (TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
+    //      == NULL)
+    //{
       //It is safe to change here, since this thread is also the enqueuer, so no pending enqueues.
       //__sync_bool_compare_and_swap(&thread_data->td.q_mask, thread_data->td.q_mask, 
       //    thread_data->td.q_mask & -2);
 			//__sync_bool_compare_and_swap(&thread_data->td.td_task_q[0]->has_items, 1, 0);
-    }
+    //}
 
     KA_TRACE(1, ("__kmp_remove_my_task(exit #4): T#%d:Q#0 %p removed: "
                 "tail=%u\n",
