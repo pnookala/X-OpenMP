@@ -2333,7 +2333,8 @@ typedef struct kmp_base_thread_data {
 #ifdef KMP_USE_LL_WORKSTEALING
 		volatile kmp_uint64 round = 1;
 		volatile kmp_uint64 steal_req_id = 0;
-		volatile kmp_taskdata_t *stolen_task = NULL;
+		volatile kmp_taskdata_t *stolen_task1 = NULL;
+		volatile kmp_taskdata_t *stolen_task2 = NULL;
 #endif
 #else
   kmp_taskdata_t *
