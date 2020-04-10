@@ -2923,6 +2923,7 @@ static kmp_task_t ** __kmp_steal_task(kmp_info_t *victim_thr[2], kmp_int32 gtid,
 
 	//Do not steal from self.
   if (victim_tid1 == victim_tid2) return NULL;
+	if (victim_tid1 == gtid || victim_tid2 == gtid) return NULL;
 
   kmp_thread_data_t *thread_data = &threads_data[gtid];
 
@@ -3202,6 +3203,9 @@ static inline int __kmp_execute_tasks_template(
   kmp_task_t *task;
 #ifdef KMP_WS_STEAL_TWO
 	kmp_task_t **tasks;
+	tasks = (kmp_task_t **) __kmp_allocate(sizeof(kmp_task_t*) * 2);
+	tasks[0] = NULL;
+	tasks[1] = NULL;
 #endif
 	kmp_info_t *other_thread;
   kmp_taskdata_t *current_task = thread->th.th_current_task;
