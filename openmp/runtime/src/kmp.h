@@ -26,6 +26,12 @@
 
 #define KMP_USE_XQUEUE 1
 
+#define TRACING_SSC_MARK( MARK_ID )                     \
+                asm volatile (                          \
+                "\n\t  movl $"#MARK_ID", %%ebx"         \
+                "\n\t  .byte 0x64, 0x67, 0x90"          \
+                : : : "%ebx","memory" );
+
 #ifndef KMP_STATIC_STEAL_ENABLED
 #define KMP_STATIC_STEAL_ENABLED 1
 #endif

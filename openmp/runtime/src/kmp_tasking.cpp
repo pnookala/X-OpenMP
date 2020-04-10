@@ -2678,7 +2678,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 				}*/
 
         *last_qid = (queue_id);// & (thread_data->td.num_queues - 1);
-        KA_TRACE(1, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
+        KA_TRACE(10, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
                 gtid, queue_id, taskdata, task_q->td_deque_tail));
         break; //found a task, first execute it.
@@ -2710,7 +2710,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         }*/
 
         *last_qid = (queue_id);// & (thread_data->td.num_queues - 1);
-      	KA_TRACE(1, ("__kmp_remove_aux_task(exit #3): T#%d:Q#%d %p removed: "
+      	KA_TRACE(10, ("__kmp_remove_aux_task(exit #3): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
                 gtid, queue_id, taskdata, task_q->td_deque_tail));
         break; //found a task, first execute it.
@@ -3005,7 +3005,7 @@ static inline int __kmp_execute_tasks_template(
                       tid = thread->th.th_info.ds.ds_tid;
 
 #ifdef KMP_USE_XQUEUE
-  kmp_uint64 last_qid = gtid;
+  kmp_uint64 last_qid = 1; //gtid;
 #endif
 
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
@@ -3038,8 +3038,10 @@ static inline int __kmp_execute_tasks_template(
       if ((task == NULL) && (threads_data->td.num_queues > 1)) {
         use_own_tasks = 0;
         
+				TRACING_SSC_MARK(0x5000);
         task = __kmp_remove_aux_task(thread, gtid, task_team, is_constrained, &last_qid); 
-      }
+      	TRACING_SSC_MARK(0x5010);
+			}
 #else
       if ((task == NULL) && (nthreads > 1)) { // Steal a task
         int asleep = 1;
@@ -3092,10 +3094,12 @@ static inline int __kmp_execute_tasks_template(
         }
 
         if (!asleep) {
-          // We have a victim to try to steal from
+          //TRACING_SSC_MARK(0x5000);
+					// We have a victim to try to steal from
           task = __kmp_steal_task(other_thread, gtid, task_team,
                                   unfinished_threads, thread_finished,
                                   is_constrained);
+					//TRACING_SSC_MARK(0x5010);
         }
         if (task != NULL) { // set last stolen to victim
           if (threads_data[tid].td.td_deque_last_stolen != victim_tid) {
