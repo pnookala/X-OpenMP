@@ -2335,6 +2335,7 @@ typedef struct kmp_base_thread_data {
     kmp_uint32 num_queues; //Number of queues per worker
     kmp_uint64 last_q; //Used for load balancing
 		//volatile bool is_allocated = false;
+		//bool found_first_task = false;
 #else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
@@ -2390,6 +2391,9 @@ typedef struct kmp_base_task_team {
 
 union KMP_ALIGN_CACHE kmp_task_team {
   kmp_base_task_team_t tt;
+//#ifdef KMP_USE_XQUEUE
+//	kmp_int32 root_tid;
+//#endif
   double tt_align; /* use worst case alignment */
   char tt_pad[KMP_PAD(kmp_base_task_team_t, CACHE_LINE)];
 };

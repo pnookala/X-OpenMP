@@ -362,6 +362,10 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
   if (!KMP_TASKING_ENABLED(task_team)) {
     __kmp_enable_tasking(task_team, thread);
+//#ifdef KMP_USE_XQUEUE
+		//This is used in remove_aux_task to figure out which queues to check
+//		task_team->root_tid = gtid;
+//#endif
   }
  
   KMP_DEBUG_ASSERT(TCR_4(task_team->tt.tt_found_tasks) == TRUE);
@@ -2648,44 +2652,42 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
                    NULL); // Caller should check this condition
 
   thread_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)];
- 
-	//if (!thread_data->td.is_allocated)
-	//	return NULL;
 
+	bool second_loop;
+	bool first_loop;
+
+	/*if (thread_data->td.found_first_task) {
+		first_loop = true;
+		second_loop = true;
+	}
+	else {
+		second_loop = gtid < task_team->root_tid;
+  	first_loop = gtid > task_team->root_tid;
+	}*/
+	
+	//if (first_loop) {
 	//for (kmp_uint64 queue_id = *last_qid; queue_id < thread_data->td.num_queues; queue_id++) 
-  for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
+	for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
   {
 			kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id]; 
-			//if (task_q->has_items) {
       if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL)
       {
         taskdata = (kmp_taskdata_t *) task_q->td_deque[task_q->td_deque_tail];
         task_q->td_deque[task_q->td_deque_tail] = NULL;
         task_q->td_deque_tail = (task_q->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
         
-        /*if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) == NULL)
-        {
-          bool success = false;
-          while(!success && (TCR_4(task_q->td_deque[task_q->td_deque_tail]) == NULL)) {
-						bool has_items = task_q->has_items;
-            success = __sync_bool_compare_and_swap(&task_q->has_items, has_items, 0);
-					}
-					//Double check if it's still the case
-					if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL)
-					{	
-						__sync_bool_compare_and_swap(&task_q->has_items, 0, 1);
-					}
-				}*/
-
+				//thread_data->td.found_first_task = true;
         *last_qid = (queue_id);// & (thread_data->td.num_queues - 1);
         KA_TRACE(10, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
                 gtid, queue_id, taskdata, task_q->td_deque_tail));
         break; //found a task, first execute it.
       }
-      //} 
-   }
+  }
+	//}
 
+	//if (second_loop)
+	//{
   if(taskdata == NULL) {
     for (kmp_uint64 queue_id = (thread_data->td.num_queues - 1); queue_id > *last_qid; queue_id--)
     {
@@ -2697,18 +2699,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         task_q->td_deque[task_q->td_deque_tail] = NULL;
         task_q->td_deque_tail = (task_q->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
 
-				/*if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) == NULL)
-        {
-          bool success = false;
-          while(!success) {
-            bool has_items = task_q->has_items;
-            success = __sync_bool_compare_and_swap(&task_q->has_items, has_items, 0);
-          }
-          //Double check if it's still the case
-          if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL)
-            __sync_bool_compare_and_swap(&task_q->has_items, 0, 1);
-        }*/
-
+				//thread_data->td.found_first_task = true;
         *last_qid = (queue_id);// & (thread_data->td.num_queues - 1);
       	KA_TRACE(10, ("__kmp_remove_aux_task(exit #3): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
@@ -2718,6 +2709,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
       //}
     }
   }
+	//}
 
   if(taskdata == NULL) {
     return NULL;
@@ -2807,7 +2799,7 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
       //    thread_data->td.q_mask & -2);
 			//__sync_bool_compare_and_swap(&thread_data->td.td_task_q[0]->has_items, 1, 0);
     //}
-
+		//thread_data->td.found_first_task = true;
     KA_TRACE(1, ("__kmp_remove_my_task(exit #4): T#%d:Q#0 %p removed: "
                 "tail=%u\n",
                 gtid, taskdata, thread_data->td.td_task_q[0]->td_deque_tail));
@@ -3005,7 +2997,7 @@ static inline int __kmp_execute_tasks_template(
                       tid = thread->th.th_info.ds.ds_tid;
 
 #ifdef KMP_USE_XQUEUE
-  kmp_uint64 last_qid = 1; //gtid;
+  kmp_uint64 last_qid = gtid;
 #endif
 
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
@@ -3038,9 +3030,7 @@ static inline int __kmp_execute_tasks_template(
       if ((task == NULL) && (threads_data->td.num_queues > 1)) {
         use_own_tasks = 0;
         
-				TRACING_SSC_MARK(0x5000);
         task = __kmp_remove_aux_task(thread, gtid, task_team, is_constrained, &last_qid); 
-      	TRACING_SSC_MARK(0x5010);
 			}
 #else
       if ((task == NULL) && (nthreads > 1)) { // Steal a task
