@@ -454,7 +454,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 #ifdef KMP_USE_XQUEUE
 	kmp_taskq_t *task_q = target_thread_data->td.td_task_q[last_q];
   task_q->td_deque[task_q->td_deque_head] = taskdata; // Push taskdata
-  // Wrap index.
+  // Wrap index
   task_q->td_deque_head = (task_q->td_deque_head + 1) & TASK_DEQUE_MASK(thread_data->td);
 
 	target_thread_data->td.last_q_accessed = last_q; 
@@ -470,7 +470,11 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 thread_data->td.last_q));
   
   if (thread_data->td.num_queues > 1) {
-			thread_data->td.last_q = (thread_data->td.last_q + 1) & (thread_data->td.num_queues - 1);
+      last_q++;
+      if (last_q < thread_data->td.num_queues)
+			  thread_data->td.last_q = last_q;
+      else
+        thread_data->td.last_q = 0;
 	}
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
