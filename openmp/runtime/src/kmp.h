@@ -2332,8 +2332,9 @@ typedef struct kmp_base_thread_data {
   kmp_bootstrap_lock_t td_deque_lock; // Lock for accessing deque
 #ifdef KMP_USE_XQUEUE
     kmp_taskq_t **td_task_q; //Queue for tasks
-    kmp_uint32 num_queues; //Number of queues per worker
+		kmp_uint32 num_queues; //Number of queues per worker
     kmp_uint64 last_q; //Used for load balancing
+		kmp_uint64 last_q_accessed;
 		//volatile bool is_allocated = false;
 		//bool found_first_task = false;
 #else
