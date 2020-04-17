@@ -2334,7 +2334,10 @@ typedef struct kmp_base_thread_data {
     kmp_taskq_t **td_task_q; //Queue for tasks  
     kmp_uint32 num_queues; //Number of queues per worker
     kmp_uint64 last_q; //Used for load balancing
-	kmp_uint64 last_q_accessed;
+	  kmp_uint64 last_q_accessed;
+		kmp_int32 last_numa_zone = 0;
+		kmp_int32 num_numa_done = 0;
+		bool numa_done = false;
 		//volatile bool is_allocated = false;
 		//bool found_first_task = false;
 #else
@@ -2381,6 +2384,8 @@ typedef struct kmp_base_task_team {
   kmp_int32 tt_max_threads; // # entries allocated for threads_data array
   kmp_int32 tt_found_proxy_tasks; // found proxy tasks since last barrier
   kmp_int32 tt_untied_task_encountered;
+	kmp_int32 tt_num_numa_zones;
+	kmp_int32 tt_num_cores_per_zone;
 
   KMP_ALIGN_CACHE
   std::atomic<kmp_int32> tt_unfinished_threads; /* #threads still active */
@@ -2392,9 +2397,9 @@ typedef struct kmp_base_task_team {
 
 union KMP_ALIGN_CACHE kmp_task_team {
   kmp_base_task_team_t tt;
-//#ifdef KMP_USE_XQUEUE
-//	kmp_int32 root_tid;
-//#endif
+#ifdef KMP_USE_XQUEUE
+	kmp_int32 root_tid;
+#endif
   double tt_align; /* use worst case alignment */
   char tt_pad[KMP_PAD(kmp_base_task_team_t, CACHE_LINE)];
 };

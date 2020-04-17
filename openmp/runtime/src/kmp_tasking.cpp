@@ -362,10 +362,11 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
   if (!KMP_TASKING_ENABLED(task_team)) {
     __kmp_enable_tasking(task_team, thread);
-//#ifdef KMP_USE_XQUEUE
+#ifdef KMP_USE_XQUEUE
 		//This is used in remove_aux_task to figure out which queues to check
-//		task_team->root_tid = gtid;
-//#endif
+		task_team->root_tid = gtid;
+		thread_data = &task_team->tt.tt_threads_data[tid];
+#endif
   }
  
   KMP_DEBUG_ASSERT(TCR_4(task_team->tt.tt_found_tasks) == TRUE);
@@ -375,8 +376,17 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   thread_data = &task_team->tt.tt_threads_data[tid];
 
 #ifdef KMP_USE_XQUEUE
+	
   kmp_uint64 last_q = thread_data->td.last_q;
-  kmp_int32 target_tid = (gtid + last_q) & (task_team->tt.tt_nproc - 1); //gtid;
+	kmp_int32 target_tid;
+	if (!thread_data->td.numa_done && task_team->root_tid == gtid && thread_data->td.last_numa_zone > -1) {
+		target_tid = thread_data->td.last_numa_zone * task_team->tt.tt_num_cores_per_zone;
+	}
+	else {
+  	target_tid = (gtid + last_q);
+		if (target_tid > task_team->tt.tt_nproc - 1)
+			target_tid = target_tid % task_team->tt.tt_nproc;
+	}
   kmp_thread_data_t *target_thread_data = &task_team->tt.tt_threads_data[target_tid]; //thread_data;
 	
 	/*if (!target_thread_data->td.is_allocated) {
@@ -470,11 +480,21 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 thread_data->td.last_q));
   
   if (thread_data->td.num_queues > 1) {
-      last_q++;
+		if (task_team->root_tid == gtid && !thread_data->td.numa_done) {
+				int my_zone = gtid / task_team->tt.tt_num_cores_per_zone;
+      	thread_data->td.last_numa_zone = (my_zone + 1) % task_team->tt.tt_num_numa_zones;
+				last_q = 0;
+				thread_data->td.num_numa_done++;
+				if (thread_data->td.num_numa_done == task_team->tt.tt_num_numa_zones)
+					thread_data->td.numa_done = true;
+		}
+		else { 
+			last_q++;
       if (last_q < thread_data->td.num_queues)
 			  thread_data->td.last_q = last_q;
       else
         thread_data->td.last_q = 0;
+		}
 	}
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
@@ -2682,9 +2702,9 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         *last_qid = thread_data->td.last_q_accessed;// & (thread_data->td.num_queues - 1);
         KA_TRACE(10, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
-                gtid, queue_id, taskdata, task_q->td_deque_tail));
+                gtid, thread_data->td.last_q_accessed, taskdata, task_q->td_deque_tail));
       }	
-	}	
+	}
 	//for (kmp_uint64 queue_id = *last_qid; queue_id < thread_data->td.num_queues; queue_id++) 
 	if (taskdata == NULL) {
 	for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
@@ -3018,7 +3038,7 @@ static inline int __kmp_execute_tasks_template(
                       tid = thread->th.th_info.ds.ds_tid;
 
 #ifdef KMP_USE_XQUEUE
-  kmp_uint64 last_qid = gtid;
+  kmp_uint64 last_qid = 1; //gtid;
 #endif
 
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
@@ -3276,7 +3296,10 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   KMP_DEBUG_ASSERT(nthreads == this_thr->th.th_team->t.t_nproc);
 
 #ifdef KMP_USE_XQUEUE
-  __kmp_num_task_queues = task_team->tt.tt_nproc;
+	if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone) 
+		__kmp_num_task_queues = task_team->tt.tt_nproc;
+	else
+  	__kmp_num_task_queues =  task_team->tt.tt_num_cores_per_zone; //task_team->tt.tt_nproc;
 #endif
 
   // Allocate or increase the size of threads_data if necessary
@@ -3377,8 +3400,8 @@ static void __kmp_alloc_task_q(kmp_info_t *thread,
     
   thread_data->td.last_q = 0; //initialize to self for task distribution  
 	thread_data->td.last_q_accessed = 0;
-
-  KA_TRACE(10, ("__kmp_alloc_task_q: T#%d allocating deques[%d,%d] for thread_data %p\n",
+  thread_data->td.last_numa_zone = -1;
+	KA_TRACE(10, ("__kmp_alloc_task_q: T#%d allocating deques[%d,%d] for thread_data %p\n",
           __kmp_gtid_from_thread(thread), __kmp_num_task_queues, INITIAL_TASK_DEQUE_SIZE,
           thread_data));
 
@@ -3543,6 +3566,15 @@ static int __kmp_realloc_task_threads_data(kmp_info_t *thread,
       KMP_DEBUG_ASSERT(*threads_data_p != NULL);
     }
 
+#ifdef KMP_USE_XQUEUE
+		task_team->tt.tt_num_cores_per_zone = 48;
+		task_team->tt.tt_num_numa_zones = nthreads / 48; //hardcoded for 8-socket machine
+
+  if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
+    __kmp_num_task_queues = task_team->tt.tt_nproc;
+  else
+    __kmp_num_task_queues =  task_team->tt.tt_num_cores_per_zone; //task_team->tt.tt_nproc;
+#endif
     // initialize threads_data pointers back to thread_info structures
     for (i = 0; i < nthreads; i++) {
       kmp_thread_data_t *thread_data = &(*threads_data_p)[i];
@@ -3551,6 +3583,8 @@ static int __kmp_realloc_task_threads_data(kmp_info_t *thread,
 #ifdef KMP_USE_XQUEUE
       if (thread_data->td.td_task_q == NULL)
         __kmp_alloc_task_q(team->t.t_threads[i], thread_data);
+			if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
+				thread_data->td.numa_done = true;
 #endif
 
       if (thread_data->td.td_deque_last_stolen >= nthreads) {
