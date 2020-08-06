@@ -2682,9 +2682,9 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         *last_qid = thread_data->td.last_q_accessed;// & (thread_data->td.num_queues - 1);
         KA_TRACE(10, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
-                gtid, queue_id, taskdata, task_q->td_deque_tail));
+                gtid, thread_data->td.last_q_accessed, taskdata, task_q->td_deque_tail));
       }	
-	}	
+	}
 	//for (kmp_uint64 queue_id = *last_qid; queue_id < thread_data->td.num_queues; queue_id++) 
 	if (taskdata == NULL) {
 	for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
@@ -3017,10 +3017,6 @@ static inline int __kmp_execute_tasks_template(
   kmp_int32 nthreads, victim_tid = -2, use_own_tasks = 1, new_victim = 0,
                       tid = thread->th.th_info.ds.ds_tid;
 
-#ifdef KMP_USE_XQUEUE
-  kmp_uint64 last_qid = gtid;
-#endif
-
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
   KMP_DEBUG_ASSERT(thread == __kmp_threads[gtid]);
 
@@ -3034,6 +3030,10 @@ static inline int __kmp_execute_tasks_template(
   thread->th.th_reap_state = KMP_NOT_SAFE_TO_REAP;
   threads_data = (kmp_thread_data_t *)TCR_PTR(task_team->tt.tt_threads_data);
   KMP_DEBUG_ASSERT(threads_data != NULL);
+
+#ifdef KMP_USE_XQUEUE
+  kmp_uint64 last_qid = (threads_data->td.num_queues <= gtid) ? 1 : gtid;
+#endif
 
   nthreads = task_team->tt.tt_nproc;
   unfinished_threads = &(task_team->tt.tt_unfinished_threads);
