@@ -376,7 +376,11 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 
 #ifdef KMP_USE_XQUEUE
   kmp_uint64 last_q = thread_data->td.last_q;
-  kmp_int32 target_tid = (gtid + last_q) & (task_team->tt.tt_nproc - 1); //gtid;
+  
+  //kmp_int32 target_tid = (gtid + last_q) & (task_team->tt.tt_nproc - 1); //gtid;
+  kmp_uint64 target_tid = gtid + last_q;
+  target_tid = (target_tid > task_team->tt.tt_nproc - 1) ? 
+                (target_tid - task_team->tt.tt_nproc) : target_tid;
   kmp_thread_data_t *target_thread_data = &task_team->tt.tt_threads_data[target_tid]; //thread_data;
 	
 	/*if (!target_thread_data->td.is_allocated) {
@@ -3050,7 +3054,6 @@ static inline int __kmp_execute_tasks_template(
 #ifdef KMP_USE_XQUEUE
       if ((task == NULL) && (threads_data->td.num_queues > 1)) {
         use_own_tasks = 0;
-        
         task = __kmp_remove_aux_task(thread, gtid, task_team, is_constrained, &last_qid); 
 			}
 #else
