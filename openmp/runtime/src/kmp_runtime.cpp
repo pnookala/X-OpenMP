@@ -3439,6 +3439,20 @@ static const unsigned __kmp_primes[] = {
 
 //---------------------------------------------------------------------------
 //  __kmp_get_random: Get a random number using a linear congruential method.
+#ifdef KMP_USE_XQUEUE
+unsigned short __kmp_get_random_from_ticks(kmp_info_t *thread) {
+  unsigned x = getticks(); //thread->th.th_x;
+  unsigned short r = x >> 16;
+
+  //thread->th.th_x = x * thread->th.th_a + 1;
+
+  KA_TRACE(30, ("__kmp_get_random: THREAD: %d, RETURN: %u\n",
+                thread->th.th_info.ds.ds_tid, r));
+
+  return r;
+}
+#endif
+
 unsigned short __kmp_get_random(kmp_info_t *thread) {
   unsigned x = thread->th.th_x;
   unsigned short r = x >> 16;

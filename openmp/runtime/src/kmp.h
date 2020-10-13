@@ -24,6 +24,22 @@
 
 /* Defines for OpenMP 3.0 tasking and auto scheduling */
 
+typedef unsigned long long ticks;
+
+static __inline__ ticks getticks(void) {
+	ticks tsc;
+	__asm__ __volatile__(
+			"rdtsc;"
+			"shl $32, %%rdx;"
+			"or %%rdx, %%rax"
+			: "=a"(tsc)
+			:
+			: "%rcx", "%rdx");
+
+	return tsc;
+}
+
+
 #define KMP_USE_XQUEUE 1
 
 #define TRACING_SSC_MARK( MARK_ID )                     \
@@ -48,6 +64,7 @@
 #define TASK_STACK_INDEX_MASK (TASK_STACK_BLOCK_SIZE - 1)
 #endif // BUILD_TIED_TASK_STACK
 
+#include "coz.h"
 #define TASK_NOT_PUSHED 1
 #define TASK_SUCCESSFULLY_PUSHED 0
 #define TASK_TIED 1
@@ -3192,6 +3209,9 @@ extern int __kmp_get_team_size(int gtid, int level);
 extern void __kmp_set_schedule(int gtid, kmp_sched_t new_sched, int chunk);
 extern void __kmp_get_schedule(int gtid, kmp_sched_t *sched, int *chunk);
 
+#ifdef KMP_USE_XQUEUE
+extern unsigned short __kmp_get_random_from_ticks(kmp_info_t *thread);
+#endif
 extern unsigned short __kmp_get_random(kmp_info_t *thread);
 extern void __kmp_init_random(kmp_info_t *thread);
 
