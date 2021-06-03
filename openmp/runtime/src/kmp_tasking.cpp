@@ -2837,7 +2837,7 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
 				tail = thread_data->td.td_task_q[0]->td_deque_tail;
 				kmp_taskdata_t *stolen_task = (kmp_taskdata_t *)thread_data->td.td_task_q[0]->td_deque[tail];
 
-				if (__kmp_task_is_allowed(gtid, is_constrained, taskdata, thread->th.th_current_task)) {
+				if (__kmp_task_is_allowed(gtid, is_constrained, stolen_task, __kmp_threads[gtid]->th.th_current_task)) {
 					stealer_data->td.stolen_task = stolen_task;	
 					thread_data->td.td_task_q[0]->td_deque[tail] = NULL;
     			thread_data->td.td_task_q[0]->td_deque_tail = (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
