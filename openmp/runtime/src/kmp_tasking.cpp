@@ -3047,12 +3047,13 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 			}
 	
 			//While waiting, do not allow other threads to put steal request to this thread.
-			int self_r = thread_data->td.round;
-			kmp_uint64 self_query = self_r + ( (kmp_uint64)gtid << 40);
-			if (thread_data->td.steal_req_id != self_query) {
+			kmp_uint64 self_r = thread_data->td.round;
+			kmp_uint64 self_query = self_r + (((kmp_uint64)gtid >> 40));
+ 			if (thread_data->td.steal_req_id != self_query) {
 				thread_data->td.steal_req_id = self_query;
 				thread_data->td.round++;
 			}
+			if (!victim_thr->th.th_active) break; //Is this the right thing to do here?
 		}
 		KA_TRACE(1, ("__kmp_steal_task(exit): T#%d could not steal from T#%d: "
                 "task_team=%p saved_round=%d victim_round=%d\n",
