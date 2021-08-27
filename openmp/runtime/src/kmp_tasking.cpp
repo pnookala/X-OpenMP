@@ -3027,7 +3027,8 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	
 	if (( victim_td->td.steal_req_id  & (((kmp_uint64)1 << 40) - 1)) < victim_td->td.round)
 	{
-		kmp_uint64 round = victim_td->td.round;
+		kmp_uint64 round;
+		__sync_fetch_and_add(&victim_td->td.round, round, 0);
 		victim_td->td.steal_req_id = round + ( (kmp_uint64)gtid << 40);	
   	while (round == (kmp_uint64)victim_td->td.round) {
 			//Send request again if needed
