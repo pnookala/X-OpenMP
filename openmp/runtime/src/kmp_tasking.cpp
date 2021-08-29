@@ -362,6 +362,12 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
   if (!KMP_TASKING_ENABLED(task_team)) {
     __kmp_enable_tasking(task_team, thread);
+#ifdef KMP_USE_XQUEUE
+  //This is used in remove_aux_task to figure out which queues to check
+  task_team->root_tid = gtid;
+  thread_data = &task_team->tt.tt_threads_data[tid];
+#endif
+
   }
  
   KMP_DEBUG_ASSERT(TCR_4(task_team->tt.tt_found_tasks) == TRUE);
@@ -372,11 +378,22 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 
 #ifdef KMP_USE_XQUEUE
   kmp_uint64 last_q = thread_data->td.last_q;
+#ifdef NUMA_AWARE  
+  kmp_int32 target_tid;
+	if (!thread_data->td.numa_done && task_team->root_tid == gtid && thread_data->td.last_numa_zone > -1) {
+		target_tid = thread_data->td.last_numa_zone * task_team->tt.tt_num_cores_per_zone;
+	}
+	else {
+  	target_tid = (gtid + last_q);
+		if (target_tid > task_team->tt.tt_nproc - 1)
+			target_tid = target_tid % task_team->tt.tt_nproc;
+	}
+#else
   kmp_int32 target_tid = gtid + last_q;
 
   target_tid = (target_tid > task_team->tt.tt_nproc - 1) ? 
                 (target_tid - task_team->tt.tt_nproc) : target_tid;
-
+#endif
   kmp_thread_data_t *target_thread_data = &task_team->tt.tt_threads_data[target_tid]; //thread_data;
 	
 	/*if (!target_thread_data->td.is_allocated) {
@@ -471,6 +488,26 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 "task=%p head=%u last_q=%u\n",
                 gtid, target_tid, taskdata, target_thread_data->td.td_task_q[last_q]->td_deque_head,
                 thread_data->td.last_q));
+#ifdef NUMA_AWARE
+  if (thread_data->td.num_queues > 1) {
+		if (task_team->root_tid == gtid && !thread_data->td.numa_done) {
+				int my_zone = gtid / task_team->tt.tt_num_cores_per_zone;
+      	thread_data->td.last_numa_zone = (my_zone + 1) % task_team->tt.tt_num_numa_zones;
+				last_q = 0;
+				thread_data->td.num_numa_done++;
+				if (thread_data->td.num_numa_done == task_team->tt.tt_num_numa_zones)
+					thread_data->td.numa_done = true;
+		}
+		else { 
+			last_q++;
+      if (last_q < thread_data->td.num_queues)
+			  thread_data->td.last_q = last_q;
+      else
+        thread_data->td.last_q = 0;
+		}
+	}
+
+#else
   if (thread_data->td.num_queues > 1) {
       last_q++;
       if (last_q < thread_data->td.num_queues)
@@ -478,7 +515,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
       else
         thread_data->td.last_q = 0;
 	}
-
+#endif
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
   thread_data->td.td_deque_tail = 
@@ -3378,9 +3415,26 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   KMP_DEBUG_ASSERT(nthreads > 0);
   KMP_DEBUG_ASSERT(nthreads == this_thr->th.th_team->t.t_nproc);
 
+
 #ifdef KMP_USE_XQUEUE
+#ifndef NUMA_AWARE
   __kmp_num_task_queues = 1; //task_team->tt.tt_nproc;
+#else
+
+  task_team->tt.tt_num_cores_per_zone = 96;
+  task_team->tt.tt_num_numa_zones = nthreads / 96; //hardcoded for 8-socket machine
+
+  if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
+    __kmp_num_task_queues = task_team->tt.tt_nproc;
+  else
+    __kmp_num_task_queues =  task_team->tt.tt_num_cores_per_zone; //task_team->tt.tt_nproc;
+      //if (thread_data->td.td_task_q == NULL)
+      //  __kmp_alloc_task_q(team->t.t_threads[i], thread_data);
+      //if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
+	//thread_data->td.numa_done = true;
 #endif
+#endif
+
 
   // Allocate or increase the size of threads_data if necessary
   is_init_thread = __kmp_realloc_task_threads_data(this_thr, task_team);
@@ -3656,6 +3710,10 @@ static int __kmp_realloc_task_threads_data(kmp_info_t *thread,
 #ifdef KMP_USE_XQUEUE
       if (thread_data->td.td_task_q == NULL)
         __kmp_alloc_task_q(team->t.t_threads[i], thread_data);
+#ifdef NUMA_AWARE      
+      if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
+        thread_data->td.numa_done = true;
+#endif
 #ifdef KMP_USE_LL_WORKSTEALING	
 			thread_data->td.round = task_team->tt.tt_nproc + 1;
 #endif
