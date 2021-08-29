@@ -2675,13 +2675,42 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         KA_TRACE(10, ("__kmp_remove_aux_task(exit #2): T#%d:Q#%d %p removed: "
                 "tail=%u\n",
                 gtid, thread_data->td.last_q_accessed, taskdata, task_q->td_deque_tail));
+#ifdef KMP_USE_LL_WORKSTEALING
+                kmp_uint64 steal_req_id = thread_data->td.steal_req_id & (((kmp_uint64)1 << 40) - 1);
+                KA_TRACE(1, ("__kmp_remove_my_task(exit #4): T#%d:Q#0 %p removed: "
+                "tail=%u, round=%d, extracted_round=%d, steal_req_id=%d\n",
+                gtid, taskdata, thread_data->td.td_task_q[0]->td_deque_tail, thread_data->td.round,
+                                                                steal_req_id, thread_data->td.steal_req_id));
+                if ((steal_req_id == thread_data->td.round)
+                                        && thread_data->td.stolen_task == NULL)
+                {
+                         if(TCR_4(thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail])
+          != NULL)
+                        {
+                                kmp_uint64 stealer_id = (thread_data->td.steal_req_id >> 40);
+                                kmp_thread_data_t *stealer_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(stealer_id)];
+                                tail = thread_data->td.td_task_q[thread_data->td.last_q_accessed]->td_deque_tail;
+                                kmp_taskdata_t *stolen_task = (kmp_taskdata_t *)thread_data->td.td_task_q[thread_data->td.last_q_accessed]->td_deque[tail];
+
+                                if (__kmp_task_is_allowed(gtid, is_constrained, stolen_task, __kmp_threads[gtid]->th.th_current_task)) {
+                                        stealer_data->td.stolen_task = stolen_task;
+                                        thread_data->td.td_task_q[thread_data->td.last_q_accessed]->td_deque[tail] = NULL;
+                        thread_data->td.td_task_q[thread_data->td.last_q_accessed]->td_deque_tail = (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
+                                        KA_TRACE(1, ("__kmp_remove_my_task(exit #4): T#%d:Q#%d %p copied to stolen_task: "
+                "tail=%u, round=%d\n",
+                gtid, thread_data->td.last_q_accessed, stolen_task, thread_data->td.td_task_q[thread_data->td.last_q_accessed]->td_deque_tail, thread_data->td.round));
+                                }
+                        }
+                        thread_data->td.round++;
+                }
+#endif
       }	
-	}
+  }
 	//for (kmp_uint64 queue_id = *last_qid; queue_id < thread_data->td.num_queues; queue_id++) 
-	if (taskdata == NULL) {
-	for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
+  if (taskdata == NULL) {
+  for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
   {
-			kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id]; 
+      kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id]; 
       if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL)
       {
         taskdata = (kmp_taskdata_t *) task_q->td_deque[task_q->td_deque_tail];
