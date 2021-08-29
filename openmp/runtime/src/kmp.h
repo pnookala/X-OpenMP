@@ -2329,10 +2329,11 @@ typedef struct kmp_base_thread_data {
     kmp_taskq_t **td_task_q; //Queue for tasks
     kmp_uint32 num_queues; //Number of queues per worker
     kmp_uint64 last_q; //Used for load balancing
+    kmp_uint64 last_q_accessed;
 #ifdef KMP_USE_LL_WORKSTEALING
-		volatile kmp_uint64 round = 1;
-		volatile kmp_uint64 steal_req_id = 0;
-		volatile kmp_taskdata_t *stolen_task = NULL;
+    volatile kmp_uint64 round = 1;
+    volatile kmp_uint64 steal_req_id = 0;
+    volatile kmp_taskdata_t *stolen_task = NULL;
 #endif
 #else
   kmp_taskdata_t *
