@@ -2537,6 +2537,9 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
 
   /* Tasking-related data for the thread */
   kmp_task_team_t *th_task_team; // Task team struct
+#ifdef KMP_USE_XQUEUE
+  kmp_task_team_t *old_th_task_team;
+#endif
   kmp_taskdata_t *th_current_task; // Innermost Task being executed
   kmp_uint8 th_task_state; // alternating 0/1 for task team identification
   kmp_uint8 *th_task_state_memo_stack; // Stack holding memos of th_task_state

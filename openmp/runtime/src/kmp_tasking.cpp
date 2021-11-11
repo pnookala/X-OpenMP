@@ -352,7 +352,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   // The first check avoids building task_team thread data if serialized
   if (taskdata->td_flags.task_serial) {
     KA_TRACE(20, ("__kmp_push_task: T#%d team serialized; returning "
-	  "TASK_AS_decatur@jccchicago.org NOT_PUSHED for task %p\n",
+	  "TASK_NOT_PUSHED for task %p\n",
 	  gtid, taskdata));
     return TASK_NOT_PUSHED;
   }
@@ -1309,6 +1309,9 @@ kmp_task_t *__kmp_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
 	  thread, team,
 	  1); // 1 indicates setup the current team regardless of nthreads
       thread->th.th_task_team = team->t.t_task_team[thread->th.th_task_state];
+#ifdef KMP_USE_XQUEUE
+      thread->th.old_th_task_team = thread->th.th_task_team;
+#endif
     }
     kmp_task_team_t *task_team = thread->th.th_task_team;
 
@@ -1974,6 +1977,10 @@ static kmp_int32 __kmpc_omp_taskwait_template(ident_t *loc_ref, kmp_int32 gtid,
 	    __kmp_task_stealing_constraint);
       }
     }
+#ifdef KMP_USE_XQUEUE
+        //Hack to terminate any threads waiting to steal
+  thread->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
+#endif
 #if USE_ITT_BUILD
     if (itt_sync_obj != NULL)
       __kmp_itt_taskwait_finished(gtid, itt_sync_obj);
@@ -2603,7 +2610,10 @@ void __kmpc_end_taskgroup(ident_t *loc, int gtid) {
       }
     }
     taskdata->td_taskwait_thread = -taskdata->td_taskwait_thread; // end waiting
-
+#ifdef KMP_USE_XQUEUE
+        //Hack to terminate any threads waiting to steal
+  thread->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
+#endif
 #if OMPT_SUPPORT && OMPT_OPTIONAL
     if (UNLIKELY(ompt_enabled.ompt_callback_sync_region_wait)) {
       ompt_callbacks.ompt_callback(ompt_callback_sync_region_wait)(
@@ -3157,29 +3167,42 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
       if (( victim_td->td.steal_req_id  & ((1UL << 40) - 1)) < round)
       	victim_td->td.steal_req_id = round + ((kmp_uint64)(gtid) << 40);
 
-      if (thread_data->td.stolen_task != NULL) {
-	taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task;
-	thread_data->td.stolen_task = NULL;
-	KMP_COUNT_BLOCK(TASK_stolen);
-	task = KMP_TASKDATA_TO_TASK(taskdata);
-	thread_data->td.round++; //To accept queries
-	KA_TRACE(1, ("__kmp_steal_task(exit): T#%d stole task %p: "
-	      "task_team=%p round=%d victim_round=%d\n",
-	      gtid, taskdata, task_team, round, victim_td->td.round));
-	return task;
-      }
-
       //While waiting, do not allow other threads to put steal request to this thread.
       kmp_uint64 self_r = thread_data->td.round;
       kmp_uint64 self_query = self_r + (((kmp_uint64)(gtid) << 40));
       if (thread_data->td.steal_req_id != self_query) {
-	thread_data->td.steal_req_id = self_query + 1;
-	thread_data->td.round++;
+        thread_data->td.steal_req_id = self_query + 1;
+        thread_data->td.round++;
       }
-      if (!victim_thr->th.th_active) {
-	KA_TRACE(1, ("Thread not active, T#%d could not steal from T#%d",
-		gtid, __kmp_gtid_from_thread(victim_thr)));
-	 break; //Is this the right thing to do here?
+      if (thread_data->td.stolen_task != NULL) {
+	      taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task;
+	      thread_data->td.stolen_task = NULL;
+	      KMP_COUNT_BLOCK(TASK_stolen);
+	      task = KMP_TASKDATA_TO_TASK(taskdata);
+	      thread_data->td.round++; //To accept queries
+	      KA_TRACE(1, ("__kmp_steal_task(exit): T#%d stole task %p: "
+	        "task_team=%p round=%d victim_round=%d\n",
+	        gtid, taskdata, task_team, round, victim_td->td.round));
+	      if (*thread_finished) {
+    	    kmp_int32 count;
+          count = KMP_ATOMIC_INC(unfinished_threads);
+  
+          KA_TRACE(
+            20,
+            ("__kmp_steal_task: T#%d inc unfinished_threads to %d: task_team=%p\n",
+            gtid, count + 1, task_team));
+
+          *thread_finished = FALSE;
+        }
+	      return task;
+      }
+
+      /*if (KMP_TASKING_ENABLED(task_team) && !victim_thr->th.th_active && victim_thr->th.th_task_team != NULL && !victim_thr->th.th_task_team->tt.tt_found_proxy_tasks) {
+      */
+      if (!task_team->tt.tt_active) {
+	      KA_TRACE(1, ("Thread not active, T#%d could not steal from T#%d",
+		      gtid, __kmp_gtid_from_thread(victim_thr)));
+	      break; //Is this the right thing to do here?
       }
     }
     KA_TRACE(1, ("__kmp_steal_task(exit): T#%d could not steal from T#%d: "
@@ -3348,6 +3371,10 @@ static inline int __kmp_execute_tasks_template(
       // waiting to be released, we know that the termination condition will not
       // be satisified, so don't waste any cycles checking it.
       if (flag == NULL || (!final_spin && flag->done_check())) {
+#ifdef KMP_USE_XQUEUE
+        //Hack to terminate any threads waiting to steal
+        threads_data[tid].td.round++;
+#endif
 	KA_TRACE(
 	    15,
 	    ("__kmp_execute_tasks_template: T#%d spin condition satisfied\n",
@@ -3385,7 +3412,10 @@ static inline int __kmp_execute_tasks_template(
       if (!*thread_finished)
       {  
 	kmp_int32 count;
-
+#ifdef KMP_USE_XQUEUE
+        //Hack to terminate any threads waiting to steal
+        threads_data[tid].td.round++;
+#endif
 	count = KMP_ATOMIC_DEC(unfinished_threads) - 1;
 	KA_TRACE(20, ("__kmp_execute_tasks_template: T#%d dec "
 	      "unfinished_threads to %d task_team=%p\n",
@@ -3399,6 +3429,10 @@ static inline int __kmp_execute_tasks_template(
       // th.th_team field for the next parallel region. If we can steal more
       // work, we know that this has not happened yet.
       if (flag != NULL && flag->done_check()) {
+#ifdef KMP_USE_XQUEUE
+        //Hack to terminate any threads waiting to steal
+        threads_data[tid].td.round++;
+#endif
 	KA_TRACE(
 	    15,
 	    ("__kmp_execute_tasks_template: T#%d spin condition satisfied\n",
@@ -3422,6 +3456,10 @@ static inline int __kmp_execute_tasks_template(
     else {
       KA_TRACE(15,
 	  ("__kmp_execute_tasks_template: T#%d can't find work\n", gtid));
+#ifdef KMP_USE_XQUEUE
+      //Hack to terminate any threads waiting to steal
+      threads_data[tid].td.round++;
+#endif
       return FALSE;
     }
   }
@@ -4068,15 +4106,16 @@ void __kmp_task_team_wait(
       // Worker threads may have dropped through to release phase, but could
       // still be executing tasks. Wait here for tasks to complete. To avoid
       // memory contention, only master thread checks termination condition.
-      /*#ifdef KMP_USE_XQUEUE
-	kmp_thread_data_t *thread_data = &task_team->tt.tt_threads_data[__kmp_gtid_from_thread(this_thr)];
-	thread_data->td.round++;
-#endif*/
       kmp_flag_32 flag(RCAST(std::atomic<kmp_uint32> *,
 	    &task_team->tt.tt_unfinished_threads),
 	  0U);
       flag.wait(this_thr, TRUE USE_ITT_BUILD_ARG(itt_sync_obj));
     }
+
+#ifdef KMP_USE_XQUEUE
+      this_thr->th.old_th_task_team = task_team;
+#endif
+
     // Deactivate the old task team, so that the worker threads will stop
     // referencing it while spinning.
     KA_TRACE(

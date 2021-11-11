@@ -5414,11 +5414,6 @@ void __kmp_free_team(kmp_root_t *root,
             break;
           }
 #endif
-#ifdef KMP_USE_XQUEUE
-  				kmp_int32 gtid = __kmp_get_gtid();
-  				//Hack to terminate any threads waiting to steal
-  				team->t.t_threads[gtid]->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
-#endif
 	        // first check if thread is sleeping
           kmp_flag_64 fl(&th->th.th_bar[bs_forkjoin_barrier].bb.b_go, th);
           if (fl.is_sleeping())
@@ -5738,6 +5733,12 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
                       gtid, (*pteam)->t.t_id, __kmp_tid_from_gtid(gtid),
                       (*pteam)->t.t_pkfn));
       }
+#ifdef KMP_USE_XQUEUE
+      if (this_thr->th.th_task_team != NULL && this_thr->th.th_task_team->tt.tt_threads_data != NULL)
+        this_thr->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
+      else
+        KA_TRACE(20, ("No access from T#%d\n", gtid));
+#endif
 #if OMPT_SUPPORT
       if (ompt_enabled.enabled) {
         /* no frame set while outside task */
@@ -7058,7 +7059,6 @@ int __kmp_invoke_task_func(int gtid) {
   *exit_frame_p = NULL;
    this_thr->th.ompt_thread_info.parallel_flags |= ompt_parallel_team;
 #endif
-
 #if KMP_STATS_ENABLED
   if (previous_state == stats_state_e::TEAMS_REGION) {
     KMP_SET_THREAD_STATE(previous_state);
@@ -7115,6 +7115,10 @@ void __kmp_teams_master(int gtid) {
   // If the team size was reduced from the limit, set it to the new size
   if (thr->th.th_team_nproc < thr->th.th_teams_size.nth)
     thr->th.th_teams_size.nth = thr->th.th_team_nproc;
+/*#ifdef KMP_USE_XQUEUE
+        //Hack to terminate any threads waiting to steal from master thread
+    thr->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
+#endif*/
   // AC: last parameter "1" eliminates join barrier which won't work because
   // worker threads are in a fork barrier waiting for more parallel regions
   __kmp_join_call(loc, gtid
@@ -7307,6 +7311,10 @@ void __kmp_internal_join(ident_t *id, int gtid, kmp_team_t *team) {
                    __kmp_threads[gtid]->th.th_team_nproc == team->t.t_nproc);
 #endif /* KMP_DEBUG */
 
+//#ifdef KMP_USE_XQUEUE
+         //Hack to terminate any threads waiting to steal
+//        team->t.t_threads[gtid]->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
+//#endif
   __kmp_join_barrier(gtid); /* wait for everyone */
 #if OMPT_SUPPORT
   if (ompt_enabled.enabled &&
