@@ -1456,7 +1456,11 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
 
   KF_TRACE(30, ("__kmp_suspend_template: T#%d enter for flag = %p\n", th_gtid,
                 flag->get()));
-
+/*#ifdef KMP_USE_XQUEUE
+  //Increment round to free anyone waiting on us before we suspend.
+  if (th->th.old_th_task_team != NULL && th->th.old_th_task_team->tt.tt_threads_data != NULL)
+        th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.round++; 
+#endif*/
   __kmp_suspend_initialize_thread(th);
 
   status = pthread_mutex_lock(&th->th.th_suspend_mx.m_mutex);
@@ -1479,7 +1483,21 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
                " was %x\n",
                th_gtid, flag->get(), flag->load(), old_spin));
 
-  if (flag->done_check_val(old_spin)) {
+/*#ifdef KMP_USE_XQUEUE
+  if (flag->done_check_val(old_spin) ||
+      (th->th.old_th_task_team != NULL && th->th.old_th_task_team->tt.tt_threads_data != NULL 
+      && (th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.steal_req_id & ((1UL << 40) - 1)) == th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.round)) 
+#else*/
+  if (flag->done_check_val(old_spin)) 
+//#endif
+  {
+/*#ifdef KMP_USE_XQUEUE
+  __kmp_debug_printf("__kmp_suspend_template: T#%d false alarm, steal_req_id: %u, round: %d\n",
+                th_gtid, th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.steal_req_id,
+                th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.round);
+  while ((th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.steal_req_id & ((1UL << 40) - 1)) == th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.round)
+    th->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.round++;
+#endif*/
     old_spin = flag->unset_sleeping();
     KF_TRACE(5, ("__kmp_suspend_template: T#%d false alarm, reset sleep bit "
                  "for spin(%p)\n",

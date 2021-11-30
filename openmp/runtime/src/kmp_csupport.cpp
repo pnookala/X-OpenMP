@@ -3334,9 +3334,6 @@ __kmp_swap_teams_for_teams_reduction(kmp_info_t *th, kmp_team_t **team_p,
       th->th.th_team = team->t.t_parent;
       th->th.th_team_nproc = th->th.th_team->t.t_nproc;
       th->th.th_task_team = th->th.th_team->t.t_task_team[0];
-#ifdef KMP_USE_XQUEUE
-      th->th.old_th_task_team = th->th.th_task_team;
-#endif
       *task_state = th->th.th_task_state;
       th->th.th_task_state = 0;
 

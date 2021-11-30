@@ -5733,12 +5733,13 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
                       gtid, (*pteam)->t.t_id, __kmp_tid_from_gtid(gtid),
                       (*pteam)->t.t_pkfn));
       }
-#ifdef KMP_USE_XQUEUE
-      if (this_thr->th.th_task_team != NULL && this_thr->th.th_task_team->tt.tt_threads_data != NULL)
-        this_thr->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
+/*#ifdef KMP_USE_XQUEUE
+      if (this_thr->th.old_th_task_team != NULL 
+          && this_thr->th.old_th_task_team->tt.tt_threads_data != NULL)
+        this_thr->th.old_th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
       else
-        KA_TRACE(20, ("No access from T#%d\n", gtid));
-#endif
+        KA_TRACE(20, ("No access from T#%d, Team %p\n", gtid, this_thr->th.old_th_task_team));
+#endif*/
 #if OMPT_SUPPORT
       if (ompt_enabled.enabled) {
         /* no frame set while outside task */
@@ -7311,10 +7312,6 @@ void __kmp_internal_join(ident_t *id, int gtid, kmp_team_t *team) {
                    __kmp_threads[gtid]->th.th_team_nproc == team->t.t_nproc);
 #endif /* KMP_DEBUG */
 
-//#ifdef KMP_USE_XQUEUE
-         //Hack to terminate any threads waiting to steal
-//        team->t.t_threads[gtid]->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
-//#endif
   __kmp_join_barrier(gtid); /* wait for everyone */
 #if OMPT_SUPPORT
   if (ompt_enabled.enabled &&

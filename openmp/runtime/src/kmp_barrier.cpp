@@ -556,6 +556,14 @@ __kmp_hyper_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid,
                 team->t.t_id, parent_tid, &thr_bar->b_arrived,
                 thr_bar->b_arrived,
                 thr_bar->b_arrived + KMP_BARRIER_STATE_BUMP));
+/*#ifdef KMP_USE_XQUEUE     
+      if (team->t.t_threads[parent_tid]->th.old_th_task_team != NULL && team->t.t_threads[parent_tid]->th.old_th_task_team->tt.tt_threads_data != NULL)
+      {
+        //team->t.t_threads[parent_tid]->th.old_th_task_team->tt.tt_threads_data[parent_tid].td.stealing_enabled = FALSE;
+        while ((team->t.t_threads[parent_tid]->th.old_th_task_team->tt.tt_threads_data[parent_tid].td.steal_req_id & ((1UL << 40) - 1)) == team->t.t_threads[parent_tid]->th.old_th_task_team->tt.tt_threads_data[parent_tid].td.round)
+        team->t.t_threads[parent_tid]->th.old_th_task_team->tt.tt_threads_data[parent_tid].td.round++;
+      }
+#endif*/
       // Mark arrival to parent thread
       /* After performing this write (in the last iteration of the enclosing for
          loop), a worker thread may not assume that the team is valid any more
@@ -586,7 +594,7 @@ __kmp_hyper_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid,
                 "arrived(%p) == %llu\n",
                 gtid, team->t.t_id, tid, __kmp_gtid_from_tid(child_tid, team),
                 team->t.t_id, child_tid, &child_bar->b_arrived, new_state));
-#ifdef KMP_USE_XQUEUE
+/*#ifdef KMP_USE_XQUEUE
       if (team->t.t_threads[gtid]->th.old_th_task_team != NULL && team->t.t_threads[gtid]->th.old_th_task_team->tt.tt_threads_data != NULL)
       {
         //Hack to terminate any threads waiting to steal
@@ -603,7 +611,14 @@ __kmp_hyper_barrier_gather(enum barrier_type bt, kmp_info_t *this_thr, int gtid,
       }
       if (child_thr->th.th_task_team != NULL && child_thr->th.th_task_team->tt.tt_threads_data != NULL)
         child_thr->th.th_task_team->tt.tt_threads_data[child_tid].td.round++;
-#endif
+#endif*/
+/*#ifdef KMP_USE_XQUEUE
+      if (child_thr->th.old_th_task_team != NULL && child_thr->th.old_th_task_team->tt.tt_threads_data != NULL)
+      {
+        while ((child_thr->th.old_th_task_team->tt.tt_threads_data[child_tid].td.steal_req_id & ((1UL << 40) - 1)) == child_thr->th.old_th_task_team->tt.tt_threads_data[child_tid].td.round)
+        child_thr->th.old_th_task_team->tt.tt_threads_data[child_tid].td.round++;
+      }
+#endif*/
       // Wait for child to arrive
       kmp_flag_64 c_flag(&child_bar->b_arrived, new_state);
       c_flag.wait(this_thr, FALSE USE_ITT_BUILD_ARG(itt_sync_obj));
@@ -685,12 +700,14 @@ static void __kmp_hyper_barrier_release(
   } else { // Handle fork barrier workers who aren't part of a team yet
     KA_TRACE(20, ("__kmp_hyper_barrier_release: T#%d wait go(%p) == %u\n", gtid,
                   &thr_bar->b_go, KMP_BARRIER_STATE_BUMP));
-#ifdef KMP_USE_XQUEUE
-    if (this_thr->th.old_th_task_team != NULL && this_thr->th.old_th_task_team->tt.tt_threads_data != NULL)
-      this_thr->th.old_th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
-    if (this_thr->th.th_task_team != NULL && this_thr->th.th_task_team->tt.tt_threads_data != NULL)
-      this_thr->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
-#endif
+/*#ifdef KMP_USE_XQUEUE
+      if (this_thr->th.old_th_task_team != NULL && this_thr->th.old_th_task_team->tt.tt_threads_data != NULL)
+      {
+        //this_thr->th.old_th_task_team->tt.tt_threads_data[tid].td.stealing_enabled = FALSE;
+        while ((this_thr->th.old_th_task_team->tt.tt_threads_data[tid].td.steal_req_id & ((1UL << 40) - 1)) == this_thr->th.old_th_task_team->tt.tt_threads_data[tid].td.round)
+        this_thr->th.old_th_task_team->tt.tt_threads_data[tid].td.round++;      
+      }
+#endif*/
     // Wait for parent thread to release us
     kmp_flag_64 flag(&thr_bar->b_go, KMP_BARRIER_STATE_BUMP);
     flag.wait(this_thr, TRUE USE_ITT_BUILD_ARG(itt_sync_obj));
@@ -797,9 +814,9 @@ static void __kmp_hyper_barrier_release(
              gtid, team->t.t_id, tid, __kmp_gtid_from_tid(child_tid, team),
              team->t.t_id, child_tid, &child_bar->b_go, child_bar->b_go,
              child_bar->b_go + KMP_BARRIER_STATE_BUMP));
-#ifdef KMP_USE_XQUEUE
-  child_thr->th.old_th_task_team = child_thr->th.th_task_team;
-  KA_TRACE(20, ("Team %p\n", this_thr->th.old_th_task_team));
+/*#ifdef KMP_USE_XQUEUE
+  //child_thr->th.old_th_task_team = child_thr->th.th_task_team;
+  //KA_TRACE(20, ("Team %p\n", this_thr->th.old_th_task_team));
         //if ((bt == bs_forkjoin_barrier || bt == bs_last_barrier) && 
         if (team->t.t_threads[gtid]->th.old_th_task_team != NULL) {
           //Hack to terminate any threads waiting to steal
@@ -808,13 +825,13 @@ static void __kmp_hyper_barrier_release(
         if (child_thr->th.old_th_task_team != NULL)
           child_thr->th.old_th_task_team->tt.tt_threads_data[child_tid].td.round++;
 
-        if (team->t.t_threads[gtid]->th.th_task_team != NULL) {
+  */      /*if (team->t.t_threads[gtid]->th.th_task_team != NULL) {
           //Hack to terminate any threads waiting to steal
           team->t.t_threads[gtid]->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
         }
         if (child_thr->th.th_task_team != NULL && child_thr->th.th_task_team->tt.tt_threads_data != NULL)
-          child_thr->th.th_task_team->tt.tt_threads_data[child_tid].td.round++;
-#endif
+          child_thr->th.th_task_team->tt.tt_threads_data[child_tid].td.round++;*/
+//#endif
         // Release child from barrier
         ANNOTATE_BARRIER_BEGIN(child_thr);
         kmp_flag_64 flag(&child_bar->b_go, child_thr);
@@ -962,12 +979,12 @@ static void __kmp_hierarchical_barrier_gather(
         KA_TRACE(20, ("__kmp_hierarchical_barrier_gather: T#%d(%d:%d) waiting "
                       "for leaf kids\n",
                       gtid, team->t.t_id, tid));
-#ifdef KMP_USE_XQUEUE
+/*#ifdef KMP_USE_XQUEUE
     if (this_thr->th.old_th_task_team != NULL && this_thr->th.old_th_task_team->tt.tt_threads_data != NULL)
       this_thr->th.old_th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
     if (this_thr->th.th_task_team != NULL && this_thr->th.th_task_team->tt.tt_threads_data != NULL)
       this_thr->th.th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(gtid)].td.round++;
-#endif
+#endif*/
         kmp_flag_64 flag(&thr_bar->b_arrived, leaf_state);
         flag.wait(this_thr, FALSE USE_ITT_BUILD_ARG(itt_sync_obj));
         if (reduce) {
@@ -1581,9 +1598,6 @@ static int __kmp_barrier_template(enum barrier_type bt, int gtid, int is_split,
         }
       }
       if (__kmp_tasking_mode != tskm_immediate_exec && !cancelled) {
-#ifdef KMP_USE_XQUEUE
-        this_thr->th.old_th_task_team = this_thr->th.th_task_team;
-#endif
         __kmp_task_team_sync(this_thr, team);
       }
     }

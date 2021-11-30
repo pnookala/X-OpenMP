@@ -361,6 +361,12 @@ final_spin=FALSE)
       break;
     }
 
+/*#ifdef KMP_USE_XQUEUE
+  if (this_thr->th.old_th_task_team != NULL && 
+      this_thr->th.old_th_task_team->tt.tt_threads_data != NULL && 
+      (this_thr->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.steal_req_id & ((1UL << 40) - 1)) == this_thr->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.round)
+    this_thr->th.old_th_task_team->tt.tt_threads_data[th_gtid].td.round++;
+#endif*/
     // If we are oversubscribed, or have waited a bit (and
     // KMP_LIBRARY=throughput), then yield
     KMP_YIELD_OVERSUB_ELSE_SPIN(spins);
@@ -389,7 +395,17 @@ final_spin=FALSE)
     // Don't suspend if there is a likelihood of new tasks being spawned.
     if ((task_team != NULL) && TCR_4(task_team->tt.tt_found_tasks))
       continue;
-
+/*#ifdef KMP_USE_XQUEUE
+    if (this_thr->th.old_th_task_team != NULL 
+        && this_thr->th.old_th_task_team->tt.tt_threads_data != NULL 
+        && !this_thr->th.old_th_task_team->tt.tt_active) 
+    {
+        kmp_thread_data_t *thread_data = &this_thr->th.old_th_task_team->tt.tt_threads_data[__kmp_tid_from_gtid(th_gtid)];
+        kmp_uint64 steal_req_id = thread_data->td.steal_req_id & ((1UL << 40) - 1);
+        if (steal_req_id == thread_data->td.round)  
+          thread_data->td.round++;
+    }
+#endif*/
 #if KMP_USE_MONITOR
     // If we have waited a bit more, fall asleep
     if (TCR_4(__kmp_global.g.g_time.dt.t_value) < hibernate)
