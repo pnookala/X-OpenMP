@@ -3676,8 +3676,8 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   __kmp_num_task_queues = 1; //task_team->tt.tt_nproc;
 #else
 
-  task_team->tt.tt_num_cores_per_zone = 24;
-  task_team->tt.tt_num_numa_zones = nthreads / 24; //hardcoded for 8-socket machine
+  task_team->tt.tt_num_cores_per_zone = 16;
+  task_team->tt.tt_num_numa_zones = nthreads / 16; //hardcoded for 8-socket machine
 
   if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
     __kmp_num_task_queues = task_team->tt.tt_nproc;
