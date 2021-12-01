@@ -2725,7 +2725,8 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	    "tail=%u\n",
 	    gtid, thread_data->td.last_q_accessed, taskdata, task_q->td_deque_tail));
     }
-#ifdef KMP_USE_LL_WORKSTEALING
+//Don't steal from last accessed queue since it is the latest task and might not be very useful if there are dependencies.
+/*#ifdef KMP_USE_LL_WORKSTEALING
   kmp_uint64 steal_req_id = thread_data->td.steal_req_id;
   //This request can be changed by someone else at this point!!
   kmp_uint64 round = steal_req_id & (kmp_uint64)((1ULL << 40) - 1);
@@ -2771,7 +2772,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
     }
     thread_data->td.round++;
   }
-#endif	
+#endif*/	
   }
   if (taskdata == NULL) {
     for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
@@ -3241,7 +3242,7 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
         "task_team=%p, round=%llu, victim_round=%d, victim_steal_req=%llu\n",
         gtid, __kmp_gtid_from_thread(victim_thr), task_team, victim_td->td.round,
         victim_td->td.steal_req_id));
-    while (round == victim_td->td.round || thread_data->td.stolen_task.load() != NULL) {
+    while (round == victim_td->td.round || thread_data->td.stolen_task != NULL) {
       //Send request again if needed
       //if (( victim_td->td.steal_req_id  & ((1UL << 40) - 1)) < round)
       //	victim_td->td.steal_req_id = round + ((kmp_uint64)(gtid) << 40);
@@ -3254,9 +3255,9 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
         thread_data->td.round++;
       }
 
-      if (thread_data->td.stolen_task.load() != nullptr) {
-        taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task.load();
-        thread_data->td.stolen_task.store(nullptr);
+      if (thread_data->td.stolen_task != nullptr) {
+        taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task;
+        thread_data->td.stolen_task = nullptr;
 	      KMP_COUNT_BLOCK(TASK_stolen);
 	      task = KMP_TASKDATA_TO_TASK(taskdata);
 	      thread_data->td.round++; //To accept queries
@@ -3278,15 +3279,15 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	      return task;
       }
 
-      if (++num_tries > 10000 && thread_data->td.stolen_task.load() == nullptr) {
+      if (++num_tries > 10000 && thread_data->td.stolen_task == nullptr) {
         //Put an invalid steal_req_id to invalidate the request.
         //What happens if we get a task at this point???
         victim_td->td.steal_req_id = round + 
             (kmp_uint64)(((kmp_uint64)task_team->tt.tt_nproc) << 40);
         //Shall we repeat the check here?
-        if (thread_data->td.stolen_task.load() != nullptr) {
-          taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task.load();
-          thread_data->td.stolen_task.store(nullptr);
+        if (thread_data->td.stolen_task != nullptr) {
+          taskdata = (kmp_taskdata_t *)thread_data->td.stolen_task;
+          thread_data->td.stolen_task = nullptr;
           KMP_COUNT_BLOCK(TASK_stolen);
           task = KMP_TASKDATA_TO_TASK(taskdata);
           thread_data->td.round++; //To accept queries
@@ -3337,11 +3338,11 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	  gtid, __kmp_gtid_from_thread(victim_thr), task_team, round,
 	  victim_td->td.round));
     kmp_taskdata_t* st = nullptr;
-    if ((st = thread_data->td.stolen_task.load()) != nullptr) {
-      printf("About to lose task: %p\n",st);
+    if ((st = thread_data->td.stolen_task) != nullptr) {
+      //printf("About to lose task: %p\n",st);
       //Shall we repeat the check here?
           taskdata = st;
-          thread_data->td.stolen_task.store(nullptr);
+          thread_data->td.stolen_task = nullptr;
           KMP_COUNT_BLOCK(TASK_stolen);
           task = KMP_TASKDATA_TO_TASK(taskdata);
           thread_data->td.round++; //To accept queries
