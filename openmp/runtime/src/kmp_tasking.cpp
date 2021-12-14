@@ -2726,7 +2726,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	    gtid, thread_data->td.last_q_accessed, taskdata, task_q->td_deque_tail));
     }
 //Don't steal from last accessed queue since it is the latest task and might not be very useful if there are dependencies.
-/*#ifdef KMP_USE_LL_WORKSTEALING
+#ifdef KMP_USE_LL_WORKSTEALING
   kmp_uint64 steal_req_id = thread_data->td.steal_req_id;
   //This request can be changed by someone else at this point!!
   kmp_uint64 round = steal_req_id & (kmp_uint64)((1ULL << 40) - 1);
@@ -2755,9 +2755,10 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         {
           kmp_taskdata_t* dummy = nullptr;
           //This is valid since asker is still waiting and it cannot put any steal requests to others
-          if (stealer_data->td.stolen_task.compare_exchange_strong(dummy, stolen_task))
+          //if (stealer_data->td.stolen_task.compare_exchange_weak(dummy, stolen_task))
+          if (stealer_data->td.stolen_task == nullptr)
           {
-            //stealer_data->td.stolen_task = stolen_task;
+            stealer_data->td.stolen_task = stolen_task;
             task_q->td_deque[tail] = NULL;
             task_q->td_deque_tail =
               (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
@@ -2772,7 +2773,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
     }
     thread_data->td.round++;
   }
-#endif*/	
+#endif	
   }
   if (taskdata == NULL) {
     for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id --) 
@@ -2817,9 +2818,10 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         {
           kmp_taskdata_t* dummy = nullptr;
           //This is valid since asker is still waiting and it cannot put any steal requests to others
-          if (stealer_data->td.stolen_task.compare_exchange_strong(dummy, stolen_task))
+          //if (stealer_data->td.stolen_task.compare_exchange_weak(dummy, stolen_task))
+          if (stealer_data->td.stolen_task == nullptr)
           {
-            //stealer_data->td.stolen_task = stolen_task;
+            stealer_data->td.stolen_task = stolen_task;
             task_q->td_deque[tail] = NULL;
             task_q->td_deque_tail =
               (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
@@ -2883,9 +2885,10 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
         {
           kmp_taskdata_t* dummy = nullptr;
           //This is valid since asker is still waiting and it cannot put any steal requests to others
-          if (stealer_data->td.stolen_task.compare_exchange_strong(dummy, stolen_task))
+          //if (stealer_data->td.stolen_task.compare_exchange_weak(dummy, stolen_task))
+          if (stealer_data->td.stolen_task == nullptr)
           {
-            //stealer_data->td.stolen_task = stolen_task;
+            stealer_data->td.stolen_task = stolen_task;
             task_q->td_deque[tail] = NULL;
             task_q->td_deque_tail =
               (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
@@ -3040,9 +3043,10 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
         {
 	        kmp_taskdata_t* dummy = nullptr; 
           //This is valid since asker is still waiting and it cannot put any steal requests to others
-          if (stealer_data->td.stolen_task.compare_exchange_strong(dummy, stolen_task))
+          if (stealer_data->td.stolen_task == nullptr)
+          //if (stealer_data->td.stolen_task.compare_exchange_weak(dummy, stolen_task))
           {
-            //stealer_data->td.stolen_task = stolen_task;	
+            stealer_data->td.stolen_task = stolen_task;	
 	          thread_data->td.td_task_q[0]->td_deque[tail] = NULL;
 	          thread_data->td.td_task_q[0]->td_deque_tail = 
               (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
@@ -3674,11 +3678,11 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
 
 #ifdef KMP_USE_XQUEUE
 #ifndef NUMA_AWARE
-  __kmp_num_task_queues = 1; //task_team->tt.tt_nproc;
+  __kmp_num_task_queues = task_team->tt.tt_nproc;
 #else
 
-  task_team->tt.tt_num_cores_per_zone = 16;
-  task_team->tt.tt_num_numa_zones = nthreads / 16; //hardcoded for 8-socket machine
+  task_team->tt.tt_num_cores_per_zone = 24;
+  task_team->tt.tt_num_numa_zones = nthreads / 24; //hardcoded for 8-socket machine
 
   if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
     __kmp_num_task_queues = task_team->tt.tt_nproc;
