@@ -27,7 +27,7 @@
 #define KMP_USE_XQUEUE 1
 #define KMP_USE_LL_WORKSTEALING 1
 //#define NUMA_AWARE 1
-//#define XQUEUE_TRACE 1
+#define XQUEUE_TRACE 1
 
 #ifndef KMP_STATIC_STEAL_ENABLED
 #define KMP_STATIC_STEAL_ENABLED 1
@@ -2312,8 +2312,8 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
 
 typedef struct kmp_taskq {
   volatile kmp_taskdata_t **td_deque;
-  kmp_uint32 td_deque_head;
-  kmp_uint32 td_deque_tail;
+  volatile kmp_uint32 td_deque_head;
+  volatile kmp_uint32 td_deque_tail;
   //bool has_items = false;
 } kmp_taskq_t;
 #endif
