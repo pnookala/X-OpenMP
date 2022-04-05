@@ -554,7 +554,9 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   }
 
 #else
+  //Continue round-robin from last_q.
   if (thread_data->td.num_queues > 1) {
+      last_q = thread_data->td.last_q;
       last_q++;
       if (last_q < thread_data->td.num_queues)
 	thread_data->td.last_q = last_q;
@@ -2913,8 +2915,8 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	    clock_gettime(CLOCK_REALTIME, &tv);
 	    double ts = tv.tv_sec * 1E9 + tv.tv_nsec;
 	    KA_TRACE(1,
-		     ("__kmp_remove_aux_task: T#%dQ#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
-		      stealer_id, last_q, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
+		     ("__kmp_remove_aux_task: T#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
+		      stealer_id, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
 #endif
 	    served = true;
 	    //break; //Come out of the loop since steal request is served.
@@ -3101,8 +3103,8 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
 	    clock_gettime(CLOCK_REALTIME, &tv);
 	    double ts = tv.tv_sec * 1E9 + tv.tv_nsec;
 	    KA_TRACE(1,
-		     ("__kmp_remove_my_task: T#%dQ#0 to T#%dQ#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
-		      gtid, stealer_id, last_q, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
+		     ("__kmp_remove_my_task: T#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
+		      stealer_id, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
 #endif		
 
 	  }
