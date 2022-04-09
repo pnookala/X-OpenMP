@@ -2871,7 +2871,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 		    (tail + 1) & TASK_DEQUE_MASK(thread_data->td);
 		}
 	      KA_TRACE(5, ("__kmp_remove_aux_task(exit #11): T#%d:Q#%d %p copied to stolen_task of T#%d: "
-			   "tail=%u, round=%d\n", gtid, queue_id, 
+			   "tail=%u, round=%d\n", gtid, nz_idx, 
 			   stolen_task, stealer_id, task_q->td_deque_tail,
 			   thread_data->td.round));
 	      //}
@@ -3360,7 +3360,6 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 		      gtid, count + 1, task_team));
 
 	    *thread_finished = FALSE;
-	    thread_data->td.thread_finished = *thread_finished;
 	  }
 #ifdef XQUEUE_TRACE	  
 	  struct timespec tv;
@@ -3373,7 +3372,7 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	}
   
   //5000000000
-	if (++num_tries > 1000000 && thread_data->td.stolen_task == nullptr) {
+	if (++num_tries > 10000 && thread_data->td.stolen_task == nullptr) {
 	  //Put an invalid steal_req_id to invalidate the request.
 	  //What happens if we get a task at this point???
 	  victim_td->td.steal_req_id = round + 
@@ -3398,7 +3397,6 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 			gtid, count + 1, task_team));
 
 	      *thread_finished = FALSE;
-	      thread_data->td.thread_finished = *thread_finished;
 	    }
 #ifdef XQUEUE_TRACE	    
 	    struct timespec tv;
@@ -3446,7 +3444,6 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 		    gtid, count + 1, task_team));
 
 	  *thread_finished = FALSE;
-	  thread_data->td.thread_finished = *thread_finished;
 	}
 #ifdef XQUEUE_TRACE	
 	struct timespec tv;
@@ -3510,11 +3507,7 @@ static inline int __kmp_execute_tasks_template(
   thread->th.th_reap_state = KMP_NOT_SAFE_TO_REAP;
   threads_data = (kmp_thread_data_t *)TCR_PTR(task_team->tt.tt_threads_data);
   KMP_DEBUG_ASSERT(threads_data != NULL);
-#ifdef KMP_USE_XQUEUE
-#ifdef KMP_USE_LL_WORKSTEALING
-  threads_data[tid].td.thread_finished = *thread_finished;
-#endif
-#endif
+
   nthreads = task_team->tt.tt_nproc;
   unfinished_threads = &(task_team->tt.tt_unfinished_threads);
   KMP_DEBUG_ASSERT(nthreads > 1 || task_team->tt.tt_found_proxy_tasks);
@@ -3692,11 +3685,6 @@ static inline int __kmp_execute_tasks_template(
 			"unfinished_threads to %d task_team=%p\n",
 			gtid, count, task_team));
 	  *thread_finished = TRUE;
-#ifdef KMP_USE_XQUEUE
-#ifdef KMP_USE_LL_WORKSTEALING
-	  threads_data[tid].td.thread_finished = *thread_finished;     
-#endif
-#endif
 	}
 
       // It is now unsafe to reference thread->th.th_team !!!

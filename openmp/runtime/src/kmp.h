@@ -2341,9 +2341,6 @@ typedef struct kmp_base_thread_data {
     volatile kmp_uint64 round = 1;
     volatile kmp_uint64 steal_req_id = 0;
     kmp_taskdata_t* stolen_task = NULL;
-    kmp_lock_t *steal_lock; 
-    volatile int thread_finished = 0;
-    volatile int stealing_enabled = 0;
 #endif
 #else
   kmp_taskdata_t *
