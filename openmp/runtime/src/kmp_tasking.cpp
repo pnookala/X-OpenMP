@@ -3347,6 +3347,9 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	  KMP_COUNT_BLOCK(TASK_stolen);
 	  task = KMP_TASKDATA_TO_TASK(taskdata);
 	  thread_data->td.round++; //To accept queries
+	  if (thread_data->td.num_tries > 10000)
+	    thread_data->td.num_tries /= 2;
+
 	  KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 		       "task_team=%p round=%d victim_round=%d\n",
 		       gtid, taskdata, task_team, round, victim_td->td.round));
@@ -3372,7 +3375,7 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	}
   
   //5000000000
-	if (++num_tries > 10000 && thread_data->td.stolen_task == nullptr) {
+	if (++num_tries > thread_data->td.num_tries && thread_data->td.stolen_task == nullptr) {
 	  //Put an invalid steal_req_id to invalidate the request.
 	  //What happens if we get a task at this point???
 	  victim_td->td.steal_req_id = round + 
@@ -3384,6 +3387,9 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	    KMP_COUNT_BLOCK(TASK_stolen);
 	    task = KMP_TASKDATA_TO_TASK(taskdata);
 	    thread_data->td.round++; //To accept queries
+	    if (thread_data->td.num_tries > 10000)
+	      thread_data->td.num_tries /= 2;
+
 	    KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 			 "task_team=%p round=%d victim_round=%d\n",
 			 gtid, taskdata, task_team, round, victim_td->td.round));
@@ -3431,6 +3437,9 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	KMP_COUNT_BLOCK(TASK_stolen);
 	task = KMP_TASKDATA_TO_TASK(taskdata);
 	thread_data->td.round++; //To accept queries
+	if (thread_data->td.num_tries > 10000)
+	  thread_data->td.num_tries /= 2;
+	
 	KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 		     "task_team=%p round=%d victim_round=%d\n",
 		     gtid, taskdata, task_team, round, victim_td->td.round));
@@ -3458,6 +3467,12 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
   KA_TRACE(5, ("__kmp_steal_task(exit): T#%d could not steal from T#%d: "
 	       "task_team=%p\n",
 	       gtid, __kmp_gtid_from_thread(victim_thr), task_team));
+  //Double num_tries to try harder next time, but only up to a threshold.
+
+  if (thread_data->td.num_tries < 2147483647)
+    thread_data->td.num_tries *= 2;
+  else thread_data->td.num_tries = 2147483647;
+  
 #ifdef XQUEUE_TRACE
   clock_gettime(CLOCK_REALTIME, &tv);
   ts = tv.tv_sec * 1E9 + tv.tv_nsec;
@@ -3888,7 +3903,8 @@ static void __kmp_alloc_task_q(kmp_info_t *thread,
   if(thread_data->td.num_queues == 0) 
     thread_data->td.num_queues = __kmp_num_task_queues;
 
-  thread_data->td.last_q = 0; //initialize to self for task distribution 
+  thread_data->td.last_q = 0; //initialize to self for task distribution
+  thread_data->td.num_tries = 10000; //Start with this initial value.
   thread->th.old_th_task_team = task_team; 
   KA_TRACE(10, ("__kmp_alloc_task_q: T#%d old task team set to %p\n", __kmp_gtid_from_thread(thread), thread->th.th_task_team));
 #ifdef KMP_USE_LL_WORKSTEALING
