@@ -2863,10 +2863,10 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
   }
 
   if(taskdata == NULL) {
-    //#ifdef KMP_USE_LL_WORKSTEALING
+#ifdef KMP_USE_LL_WORKSTEALING
     //No tasks found, let's deny any steal requests.
-    //thread_data->td.round++;
-    //#endif
+    thread_data->td.round++;
+#endif
 #ifdef XQUEUE_TRACE
     clock_gettime(CLOCK_REALTIME, &tv);
     ts = tv.tv_sec * 1E9 + tv.tv_nsec;
