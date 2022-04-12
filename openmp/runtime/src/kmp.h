@@ -64,7 +64,6 @@ static __inline__ ticks getticks(void) {
 #define TASK_STACK_INDEX_MASK (TASK_STACK_BLOCK_SIZE - 1)
 #endif // BUILD_TIED_TASK_STACK
 
-#include "coz.h"
 #define TASK_NOT_PUSHED 1
 #define TASK_SUCCESSFULLY_PUSHED 0
 #define TASK_TIED 1
