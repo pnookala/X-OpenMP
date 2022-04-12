@@ -417,7 +417,8 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   if (got_steal_req) {
     kmp_uint64 stealer_id = steal_req_id >> 40;
     target_tid = stealer_id;
-    last_q = abs((kmp_int64)target_tid - (kmp_int64)gtid);
+    last_q = (target_tid < gtid) ? task_team->tt.tt_nproc + target_tid - gtid :
+	      target_tid - gtid; //abs((kmp_int64)target_tid - (kmp_int64)gtid);
   } else {
 #endif
     target_tid = gtid + last_q;
@@ -556,7 +557,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 #else
   //Continue round-robin from last_q.
   if (thread_data->td.num_queues > 1) {
-    //last_q = thread_data->td.last_q;
+    last_q = thread_data->td.last_q;
       last_q++;
       if (last_q < thread_data->td.num_queues)
 	thread_data->td.last_q = last_q;
@@ -2767,7 +2768,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
   kmp_thread_data_t *status_thread_data;
   kmp_uint32 tail;
 
-  kmp_uint64 nz_idx = -1; //for optimizing work stealing
+  kmp_uint64 nz_idx = 0; //for optimizing work stealing
   bool got_steal_req = false;
 
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
@@ -2794,7 +2795,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
   
   if (thread_data->td.last_q_accessed > 0) {
     kmp_taskq_t *task_q = thread_data->td.td_task_q[thread_data->td.last_q_accessed];
-    if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL && taskdata == NULL)
+    if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL)
       {
 	taskdata = (kmp_taskdata_t *) task_q->td_deque[task_q->td_deque_tail];
 	task_q->td_deque[task_q->td_deque_tail] = NULL;
@@ -2811,8 +2812,10 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
     //Don't steal from last accessed queue since it is the latest task and might not be very useful if there are dependencies.
   }
 
-  if (taskdata == NULL || (got_steal_req && nz_idx < 0)) {
-    for (kmp_uint64 queue_id = *last_qid; queue_id > 0; queue_id--) 
+  kmp_uint64 local_lastq_id = *last_qid;
+
+  if ((taskdata == NULL) || (got_steal_req && nz_idx == 0)) {
+    for (kmp_uint64 queue_id = local_lastq_id; queue_id > 0; queue_id--) 
       {
 	kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id]; 
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL && taskdata == NULL)
@@ -2829,14 +2832,14 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	  }
 	//Found a task, but we need to keep looking for work stealing
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL) {
-	  nz_idx = *last_qid;
+	  nz_idx = queue_id;
 	  break;
 	}
       }
   }
 
-  if (taskdata == NULL || (got_steal_req && nz_idx < 0)) {
-    for (kmp_uint64 queue_id = (thread_data->td.num_queues - 1); queue_id > *last_qid; queue_id--)
+  if ((taskdata == NULL) || (got_steal_req && nz_idx == 0)) {
+    for (kmp_uint64 queue_id = (thread_data->td.num_queues - 1); queue_id > local_lastq_id; queue_id--)
       {
 	kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id];
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL && taskdata == NULL)
@@ -2853,17 +2856,17 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	  }
 
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL) {
-	  nz_idx = *last_qid;
+	  nz_idx = queue_id;
 	  break; //found a task, first execute it.
 	}
       }
   }
 
   if(taskdata == NULL) {
-#ifdef KMP_USE_LL_WORKSTEALING
+    //#ifdef KMP_USE_LL_WORKSTEALING
     //No tasks found, let's deny any steal requests.
-    thread_data->td.round++;
-#endif
+    //thread_data->td.round++;
+    //#endif
 #ifdef XQUEUE_TRACE
     clock_gettime(CLOCK_REALTIME, &tv);
     ts = tv.tv_sec * 1E9 + tv.tv_nsec;
@@ -2885,7 +2888,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 #endif     
 
       //for (kmp_uint64 queue_id = 1; queue_id < (thread_data->td.num_queues - 1); queue_id++) {
-      if (nz_idx > -1) {
+      if (nz_idx > 0) {
 	kmp_taskq_t *task_q = thread_data->td.td_task_q[nz_idx];
 	if(TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL) {
 	  //Check if the steal request is still valid!
@@ -2893,33 +2896,36 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	  if (stealer_id == thread_data->td.steal_req_id >> 40) {
 	    //Steal request can get overwritten, but asker is still waiting at this point
 	    //Since round has not been incremented, so we can still steal a task.
-	    kmp_thread_data_t *stealer_data = &task_team->tt.tt_threads_data[__kmp_tid_from_gtid(stealer_id)];
+	    kmp_thread_data_t *stealer_data = &task_team->tt.tt_threads_data[stealer_id];
 	    kmp_taskdata_t *stolen_task = (kmp_taskdata_t *)task_q->td_deque[task_q->td_deque_tail];
 
 	    //I can push here since I am the only enqueuer to the target queue
-	    kmp_uint64 last_q = abs((kmp_int64)stealer_id - (kmp_int64)gtid);
+	    kmp_uint64 last_q = (stealer_id < gtid) ? task_team->tt.tt_nproc + stealer_id - gtid :
+	      stealer_id - gtid; //abs((kmp_int64)stealer_id - (kmp_int64)gtid);
 	    kmp_taskq_t *stealer_task_q = stealer_data->td.td_task_q[last_q];
-	    stealer_task_q->td_deque[stealer_task_q->td_deque_head] = stolen_task;
-	    // Wrap index.
-	    stealer_task_q->td_deque_head = (stealer_task_q->td_deque_head + 1) &
-	      TASK_DEQUE_MASK(stealer_data->td);
+	    if (TCR_4(stealer_task_q->td_deque[stealer_task_q->td_deque_head]) == NULL) {
+	      stealer_task_q->td_deque[stealer_task_q->td_deque_head] = stolen_task;
+	      // Wrap index.
+	      stealer_task_q->td_deque_head = (stealer_task_q->td_deque_head + 1) &
+		TASK_DEQUE_MASK(stealer_data->td);
 
-	    stealer_data->td.last_q_accessed = last_q;
+	      stealer_data->td.last_q_accessed = last_q;
 
-	    task_q->td_deque[task_q->td_deque_tail] = NULL;
-	    task_q->td_deque_tail =
-	      (task_q->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
+	      task_q->td_deque[task_q->td_deque_tail] = NULL;
+	      task_q->td_deque_tail =
+		(task_q->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
 	    
 #ifdef XQUEUE_TRACE	      
-	    struct timespec tv;
-	    clock_gettime(CLOCK_REALTIME, &tv);
-	    double ts = tv.tv_sec * 1E9 + tv.tv_nsec;
-	    KA_TRACE(1,
-		     ("__kmp_remove_aux_task: T#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
-		      stealer_id, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
+	      struct timespec tv;
+	      clock_gettime(CLOCK_REALTIME, &tv);
+	      double ts = tv.tv_sec * 1E9 + tv.tv_nsec;
+	      KA_TRACE(1,
+		       ("__kmp_remove_aux_task: T#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
+			stealer_id, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
 #endif
-	    served = true;
-	    //break; //Come out of the loop since steal request is served.
+	      served = true;
+	      //break; //Come out of the loop since steal request is served.
+	    }
 	  }
 	}
       }
@@ -3087,26 +3093,28 @@ static kmp_task_t *__kmp_remove_my_task(kmp_info_t *thread, kmp_int32 gtid,
 	    kmp_taskdata_t *stolen_task = (kmp_taskdata_t *)thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail];
 
 	    //I can push here since I am the only enqueuer to the target queue
-	    kmp_uint64 last_q = abs((kmp_int64)stealer_id - (kmp_int64)gtid);
+	    kmp_uint64 last_q = (stealer_id < gtid) ? task_team->tt.tt_nproc + stealer_id - gtid :
+	      stealer_id - gtid; //abs((kmp_int64)stealer_id - (kmp_int64)gtid);
 	    kmp_taskq_t *task_q = stealer_data->td.td_task_q[last_q];
-	    task_q->td_deque[task_q->td_deque_head] = stolen_task;
-	    // Wrap index.
-	    task_q->td_deque_head = (task_q->td_deque_head + 1) & TASK_DEQUE_MASK(stealer_data->td);
+	    if (TCR_4(task_q->td_deque[task_q->td_deque_head]) == NULL) {
+	      task_q->td_deque[task_q->td_deque_head] = stolen_task;
+	      // Wrap index.
+	      task_q->td_deque_head = (task_q->td_deque_head + 1) & TASK_DEQUE_MASK(stealer_data->td);
 
-	    stealer_data->td.last_q_accessed = last_q;
+	      stealer_data->td.last_q_accessed = last_q;
 
-	    thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail] = NULL;
-	    thread_data->td.td_task_q[0]->td_deque_tail = 
-	      (thread_data->td.td_task_q[0]->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
-	    //}
+	      thread_data->td.td_task_q[0]->td_deque[thread_data->td.td_task_q[0]->td_deque_tail] = NULL;
+	      thread_data->td.td_task_q[0]->td_deque_tail = 
+		(thread_data->td.td_task_q[0]->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
+	      //}
 #ifdef XQUEUE_TRACE		
-	    clock_gettime(CLOCK_REALTIME, &tv);
-	    double ts = tv.tv_sec * 1E9 + tv.tv_nsec;
-	    KA_TRACE(1,
-		     ("__kmp_remove_my_task: T#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
-		      stealer_id, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
+	      clock_gettime(CLOCK_REALTIME, &tv);
+	      double ts = tv.tv_sec * 1E9 + tv.tv_nsec;
+	      KA_TRACE(1,
+		       ("__kmp_remove_my_task: T#%d STEAL TASK SUCCESS %p %f head:%d tail:%d tasktype:%d\n",
+			stealer_id, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
 #endif		
-
+	    }
 	  }
 	}
       else {
@@ -3547,11 +3555,7 @@ static inline int __kmp_execute_tasks_template(
   thread->th.th_reap_state = KMP_NOT_SAFE_TO_REAP;
   threads_data = (kmp_thread_data_t *)TCR_PTR(task_team->tt.tt_threads_data);
   KMP_DEBUG_ASSERT(threads_data != NULL);
-#ifdef KMP_USE_XQUEUE
-#ifdef KMP_USE_LL_WORKSTEALING
-  threads_data[tid].td.thread_finished = *thread_finished;
-#endif
-#endif
+
   nthreads = task_team->tt.tt_nproc;
   unfinished_threads = &(task_team->tt.tt_unfinished_threads);
   KMP_DEBUG_ASSERT(nthreads > 1 || task_team->tt.tt_found_proxy_tasks);
@@ -3729,11 +3733,6 @@ static inline int __kmp_execute_tasks_template(
 			"unfinished_threads to %d task_team=%p\n",
 			gtid, count, task_team));
 	  *thread_finished = TRUE;
-#ifdef KMP_USE_XQUEUE
-#ifdef KMP_USE_LL_WORKSTEALING
-	  threads_data[tid].td.thread_finished = *thread_finished;     
-#endif
-#endif
 	}
 
       // It is now unsafe to reference thread->th.th_team !!!
@@ -3941,7 +3940,6 @@ static void __kmp_alloc_task_q(kmp_info_t *thread,
   thread->th.old_th_task_team = task_team; 
   KA_TRACE(10, ("__kmp_alloc_task_q: T#%d old task team set to %p\n", __kmp_gtid_from_thread(thread), thread->th.th_task_team));
 #ifdef KMP_USE_LL_WORKSTEALING
-  thread_data->td.stolen_task = NULL;
   thread_data->td.steal_req_id = 0;
 #endif
 
