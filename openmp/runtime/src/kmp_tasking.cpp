@@ -2771,9 +2771,11 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
       }
     //Don't steal from last accessed queue since it is the latest task and might not be very useful if there are dependencies.
   }
+  
+  kmp_uint64 local_lastq_id = *last_qid;
 
   if (taskdata == NULL) {
-    for (kmp_uint64 queue_id = *last_qid; queue_id > 0; --queue_id) 
+    for (kmp_uint64 queue_id = local_lastq_id; queue_id > 0; --queue_id) 
       {
 	kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id]; 
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL && taskdata == NULL)
@@ -2790,14 +2792,14 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	  }
 	//Found a task, but we need to keep looking for work stealing
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL) {
-	  nz_idx = *last_qid;
+	  nz_idx = queue_id;
 	  break;
 	}
       }
   }
 
   if (taskdata == NULL) {
-    for (kmp_uint64 queue_id = (thread_data->td.num_queues - 1); queue_id > *last_qid; queue_id--)
+    for (kmp_uint64 queue_id = (thread_data->td.num_queues - 1); queue_id > local_lastq_id; queue_id--)
       {
 	kmp_taskq_t *task_q = thread_data->td.td_task_q[queue_id];
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL && taskdata == NULL)
@@ -2814,7 +2816,7 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	  }
 
 	if (TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL) {
-	  nz_idx = *last_qid;
+	  nz_idx = queue_id;
 	  break; //found a task, first execute it.
 	}
       }
@@ -3348,7 +3350,7 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	  task = KMP_TASKDATA_TO_TASK(taskdata);
 	  thread_data->td.round++; //To accept queries
 	  if (thread_data->td.num_tries > 10000)
-	    thread_data->td.num_tries /= 2;
+	    thread_data->td.num_tries -= 10000; //Decrease num tries slowly to get better workstealing performance.
 
 	  KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 		       "task_team=%p round=%d victim_round=%d\n",
@@ -3388,7 +3390,7 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	    task = KMP_TASKDATA_TO_TASK(taskdata);
 	    thread_data->td.round++; //To accept queries
 	    if (thread_data->td.num_tries > 10000)
-	      thread_data->td.num_tries /= 2;
+	      thread_data->td.num_tries -= 10000;
 
 	    KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 			 "task_team=%p round=%d victim_round=%d\n",
@@ -3438,7 +3440,7 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	task = KMP_TASKDATA_TO_TASK(taskdata);
 	thread_data->td.round++; //To accept queries
 	if (thread_data->td.num_tries > 10000)
-	  thread_data->td.num_tries /= 2;
+	  thread_data->td.num_tries -= 10000;
 	
 	KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 		     "task_team=%p round=%d victim_round=%d\n",
