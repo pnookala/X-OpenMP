@@ -3349,8 +3349,8 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	  KMP_COUNT_BLOCK(TASK_stolen);
 	  task = KMP_TASKDATA_TO_TASK(taskdata);
 	  thread_data->td.round++; //To accept queries
-	  if (thread_data->td.num_tries > 10000)
-	    thread_data->td.num_tries -= 10000; //Decrease num tries slowly to get better workstealing performance.
+	  if (thread_data->td.num_tries > 8192)
+	    thread_data->td.num_tries -= 8192; //Decrease num tries slowly to get better workstealing performance.
 
 	  KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 		       "task_team=%p round=%d victim_round=%d\n",
@@ -3389,8 +3389,8 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	    KMP_COUNT_BLOCK(TASK_stolen);
 	    task = KMP_TASKDATA_TO_TASK(taskdata);
 	    thread_data->td.round++; //To accept queries
-	    if (thread_data->td.num_tries > 10000)
-	      thread_data->td.num_tries -= 10000;
+	    if (thread_data->td.num_tries > 8192)
+	      thread_data->td.num_tries -= 8192;
 
 	    KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 			 "task_team=%p round=%d victim_round=%d\n",
@@ -3439,8 +3439,8 @@ static kmp_task_t *__kmp_steal_task(kmp_info_t *victim_thr, kmp_int32 gtid,
 	KMP_COUNT_BLOCK(TASK_stolen);
 	task = KMP_TASKDATA_TO_TASK(taskdata);
 	thread_data->td.round++; //To accept queries
-	if (thread_data->td.num_tries > 10000)
-	  thread_data->td.num_tries -= 10000;
+	if (thread_data->td.num_tries > 8192)
+	  thread_data->td.num_tries -= 8192;
 	
 	KA_TRACE(5, ("__kmp_steal_task(exit): T#%d stole task %p: "
 		     "task_team=%p round=%d victim_round=%d\n",
