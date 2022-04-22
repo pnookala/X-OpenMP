@@ -586,6 +586,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   clock_gettime(CLOCK_REALTIME, &tv);
   ts = tv.tv_sec * 1E9 + tv.tv_nsec;
   if (got_steal_req) {
+    target_thread_data->td.td_deque_last_stolen = gtid;
     KA_TRACE(1,
 	     ("__kmp_push_task: T#%d STEAL TASK SUCCESS %f tasktype: %d\n", steal_req_id >> 40, taskdata, ts, taskdata->td_flags.tasktype));
   }
@@ -2895,7 +2896,8 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	       ("__kmp_remove_aux_task: T#%d STEAL REQ RECV %f\n", gtid, ts));
 #endif     
 
-      for (kmp_uint64 nz_idx = 0; nz_idx < (thread_data->td.num_queues - 1); nz_idx++) {
+      int count = 0;
+      for (kmp_uint64 nz_idx = 0; nz_idx < (thread_data->td.num_queues - 1) && count < 1; nz_idx++) {
 	//if (nz_idx > 0) {
 	kmp_taskq_t *task_q = thread_data->td.td_task_q[nz_idx];
 	if(TCR_4(task_q->td_deque[task_q->td_deque_tail]) != NULL) {
@@ -2922,7 +2924,8 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 	      task_q->td_deque[task_q->td_deque_tail] = NULL;
 	      task_q->td_deque_tail =
 		(task_q->td_deque_tail + 1) & TASK_DEQUE_MASK(thread_data->td);
-	    
+
+	      stealer_data->td.td_deque_last_stolen = gtid; //save the last stolen victim ID.
 #ifdef XQUEUE_TRACE	      
 	      struct timespec tv;
 	      clock_gettime(CLOCK_REALTIME, &tv);
@@ -2932,7 +2935,8 @@ static kmp_task_t *__kmp_remove_aux_task(kmp_info_t *thread, kmp_int32 gtid,
 			stealer_id, stolen_task, ts, task_q->td_deque_head, task_q->td_deque_tail, taskdata->td_flags.tasktype));
 #endif
 	      served = true;
-	      break; //Come out of the loop since steal request is served.
+	      count++;
+	      //break; //Come out of the loop since steal request is served.
 	    }
 	  }
 	}
