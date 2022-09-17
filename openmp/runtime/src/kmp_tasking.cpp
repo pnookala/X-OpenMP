@@ -480,22 +480,22 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 thread_data->td.last_q));
   
   if (thread_data->td.num_queues > 1) {
-		if (task_team->root_tid == gtid && !thread_data->td.numa_done) {
-				int my_zone = gtid / task_team->tt.tt_num_cores_per_zone;
-      	thread_data->td.last_numa_zone = (my_zone + 1) % task_team->tt.tt_num_numa_zones;
-				last_q = 0;
-				thread_data->td.num_numa_done++;
-				if (thread_data->td.num_numa_done == task_team->tt.tt_num_numa_zones)
-					thread_data->td.numa_done = true;
-		}
-		else { 
-			last_q++;
+    if (task_team->root_tid == gtid && !thread_data->td.numa_done) {
+      int my_zone = gtid / task_team->tt.tt_num_cores_per_zone;
+      thread_data->td.last_numa_zone = (my_zone + 1) % task_team->tt.tt_num_numa_zones;
+      last_q = 0;
+      thread_data->td.num_numa_done++;
+      if (thread_data->td.num_numa_done == task_team->tt.tt_num_numa_zones)
+	thread_data->td.numa_done = true;
+    }
+    else { 
+      last_q++;
       if (last_q < thread_data->td.num_queues)
-			  thread_data->td.last_q = last_q;
+	thread_data->td.last_q = last_q;
       else
         thread_data->td.last_q = 0;
-		}
-	}
+    }
+  }
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
   thread_data->td.td_deque_tail = 
@@ -3567,8 +3567,8 @@ static int __kmp_realloc_task_threads_data(kmp_info_t *thread,
     }
 
 #ifdef KMP_USE_XQUEUE
-		task_team->tt.tt_num_cores_per_zone = 48;
-		task_team->tt.tt_num_numa_zones = nthreads / 48; //hardcoded for 8-socket machine
+		task_team->tt.tt_num_cores_per_zone = 24;
+		task_team->tt.tt_num_numa_zones = nthreads / 24; //hardcoded for 8-socket machine
 
   if (task_team->tt.tt_nproc < task_team->tt.tt_num_cores_per_zone)
     __kmp_num_task_queues = task_team->tt.tt_nproc;
