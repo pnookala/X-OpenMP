@@ -15,6 +15,7 @@
 #define KMP_H
 
 #include "kmp_config.h"
+#include <papi.h>
 
 /* #define BUILD_PARALLEL_ORDERED 1 */
 
@@ -40,7 +41,14 @@ static __inline__ ticks getticks(void) {
 }
 
 
-#define KMP_USE_XQUEUE 1
+//#define KMP_USE_XQUEUE 1
+//#define KMP_USE_PAPI 1
+
+
+#ifdef KMP_USE_PAPI
+static pthread_mutex_t papi_mutex;
+static long long counters[4];
+#endif
 
 #define TRACING_SSC_MARK( MARK_ID )                     \
                 asm volatile (                          \
@@ -2369,7 +2377,7 @@ typedef struct kmp_base_thread_data {
 #endif // BUILD_TIED_TASK_STACK
 } kmp_base_thread_data_t;
 
-#define TASK_DEQUE_BITS 4 // Used solely to define INITIAL_TASK_DEQUE_SIZE
+#define TASK_DEQUE_BITS 8 // Used solely to define INITIAL_TASK_DEQUE_SIZE
 #define INITIAL_TASK_DEQUE_SIZE (1 << TASK_DEQUE_BITS)
 
 #define TASK_DEQUE_SIZE(td) ((td).td_deque_size)

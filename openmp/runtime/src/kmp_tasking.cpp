@@ -329,6 +329,14 @@ static void __kmp_realloc_task_deque(kmp_info_t *thread,
 
 //  __kmp_push_task: Add a task to the thread's deque
 static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
+#ifdef KMP_USE_PAPI
+  int PAPI_events[] = {PAPI_TOT_CYC, PAPI_L3_TCM, PAPI_L3_TCA, PAPI_RES_STL};
+  long long local_counters[4];
+  PAPI_start_counters( PAPI_events, 4 );
+#endif
+  
+  printf("task priority %d\n", task->data1.priority);
+
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_task_team_t *task_team = thread->th.th_task_team;
@@ -500,6 +508,16 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 
   __kmp_release_bootstrap_lock(&thread_data->td.td_deque_lock);
 #endif
+#ifdef KMP_USE_PAPI
+  PAPI_read_counters(local_counters, 4);
+  pthread_mutex_lock(&papi_mutex);
+  counters[0] += local_counters[0];
+  counters[1] += local_counters[1];
+  counters[2] += local_counters[2];
+  counters[3] += local_counters[3];
+  pthread_mutex_unlock(&papi_mutex);
+#endif
+
   return TASK_SUCCESSFULLY_PUSHED;
 }
 
@@ -3284,6 +3302,14 @@ static void __kmp_enable_tasking(kmp_task_team_t *task_team,
   KMP_DEBUG_ASSERT(nthreads > 0);
   KMP_DEBUG_ASSERT(nthreads == this_thr->th.th_team->t.t_nproc);
 
+#ifdef KMP_USE_PAPI
+  counters[0] = 0;
+  counters[1] = 0;
+  counters[2] = 0;
+  counters[3] = 0;
+  PAPI_library_init(PAPI_VER_CURRENT);
+  pthread_mutex_init(&papi_mutex, NULL);
+#endif
 #ifdef KMP_USE_XQUEUE
   __kmp_num_task_queues = task_team->tt.tt_nproc;
 #endif
@@ -3669,6 +3695,9 @@ void __kmp_free_task_team(kmp_info_t *thread, kmp_task_team_t *task_team) {
 // Cannot do anything that needs a thread structure or gtid since they are
 // already gone.
 void __kmp_reap_task_teams(void) {
+#ifdef KMP_USE_PAPI
+  printf("%lld L3 cache misses (%.3lf%% misses) in %lld cycles, %lld stalled cycles\n", counters[1], (double)counters[1] / (double)counters[2], counters[0], counters[3]);
+#endif
   kmp_task_team_t *task_team;
 
   if (TCR_PTR(__kmp_free_task_teams) != NULL) {
