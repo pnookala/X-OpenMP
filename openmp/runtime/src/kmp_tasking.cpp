@@ -335,8 +335,6 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   PAPI_start_counters( PAPI_events, 4 );
 #endif
   
-  printf("task priority %d\n", task->data1.priority);
-
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_task_team_t *task_team = thread->th.th_task_team;
