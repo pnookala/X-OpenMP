@@ -336,7 +336,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   kmp_thread_data_t *thread_data;
 
   KA_TRACE(20,
-           ("__kmp_push_task: T#%d trying to push task %p.\n", gtid, taskdata));
+           ("__kmp_push_task: T#%d trying to push task %p with parent %p.\n", gtid, taskdata, taskdata->td_parent));
 
   if (taskdata->td_flags.tiedness == TASK_UNTIED) {
     // untied task needs to increment counter so that the task structure is not
@@ -376,29 +376,48 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   thread_data = &task_team->tt.tt_threads_data[tid];
 
 #ifdef KMP_USE_XQUEUE
-	
+
   kmp_uint64 last_q = thread_data->td.last_q;
-	kmp_int32 target_tid;
-	if (!thread_data->td.numa_done && task_team->root_tid == gtid && thread_data->td.last_numa_zone > -1) {
-		target_tid = thread_data->td.last_numa_zone * task_team->tt.tt_num_cores_per_zone;
-	}
-	else {
-  	target_tid = (gtid + last_q);
-		if (target_tid > task_team->tt.tt_nproc - 1)
-			target_tid = target_tid % task_team->tt.tt_nproc;
-	}
+  kmp_int32 target_tid;
+
+  if (thread_data->td.last_parent == NULL || thread_data->td.last_parent != taskdata->td_parent) {
+    //increment child_count
+    thread_data->td.child_count = 1;
+    thread_data->td.last_target = gtid;
+    //enqueue to current numa
+    target_tid = (gtid + last_q);
+    if (target_tid > task_team->tt.tt_nproc - 1)
+      target_tid = target_tid % task_team->tt.tt_nproc;    
+  }
+  else {
+    thread_data->td.child_count++;
+    //enqueue to next numa zone, may be use the master queues for this?
+    target_tid = thread_data->td.last_target + task_team->tt.tt_num_cores_per_zone;
+    last_q = 0;
+    if (target_tid > task_team->tt.tt_nproc - 1)
+      target_tid = target_tid % task_team->tt.tt_nproc;
+  }
+  
+  /*if (!thread_data->td.numa_done && task_team->root_tid == gtid && thread_data->td.last_numa_zone > -1) {
+    target_tid = thread_data->td.last_numa_zone * task_team->tt.tt_num_cores_per_zone;
+  }
+  else {
+    target_tid = (gtid + last_q);
+    if (target_tid > task_team->tt.tt_nproc - 1)
+      target_tid = target_tid % task_team->tt.tt_nproc;
+      }*/
   kmp_thread_data_t *target_thread_data = &task_team->tt.tt_threads_data[target_tid]; //thread_data;
 	
-	/*if (!target_thread_data->td.is_allocated) {
-		last_q = 0;
-		target_tid = gtid;
-		target_thread_data = thread_data;	
-	}*/
+  /*if (!target_thread_data->td.is_allocated) {
+    last_q = 0;
+    target_tid = gtid;
+    target_thread_data = thread_data;	
+    }*/
 
-	if (thread_data->td.td_task_q == NULL) {
+  if (thread_data->td.td_task_q == NULL) {
     __kmp_alloc_task_q(thread, thread_data);
-  	//thread_data->td.is_allocated = true;
-	}
+    //thread_data->td.is_allocated = true;
+  }
 #else
   // No lock needed since only owner can allocate
   if (thread_data->td.td_deque == NULL) {
@@ -480,20 +499,22 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 thread_data->td.last_q));
   
   if (thread_data->td.num_queues > 1) {
-    if (task_team->root_tid == gtid && !thread_data->td.numa_done) {
+    /*    if (task_team->root_tid == gtid && !thread_data->td.numa_done) {
       int my_zone = gtid / task_team->tt.tt_num_cores_per_zone;
       thread_data->td.last_numa_zone = (my_zone + 1) % task_team->tt.tt_num_numa_zones;
       last_q = 0;
       thread_data->td.num_numa_done++;
       if (thread_data->td.num_numa_done == task_team->tt.tt_num_numa_zones)
-	thread_data->td.numa_done = true;
-    }
-    else { 
+      thread_data->td.numa_done = true;*/
+    if (thread_data->td.child_count == 1) {
       last_q++;
       if (last_q < thread_data->td.num_queues)
 	thread_data->td.last_q = last_q;
       else
         thread_data->td.last_q = 0;
+    }
+    else {
+      thread_data->td.last_target = target_tid;
     }
   }
 #else

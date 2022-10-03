@@ -2331,15 +2331,18 @@ typedef struct kmp_base_thread_data {
   // queued?
   kmp_bootstrap_lock_t td_deque_lock; // Lock for accessing deque
 #ifdef KMP_USE_XQUEUE
-    kmp_taskq_t **td_task_q; //Queue for tasks  
-    kmp_uint32 num_queues; //Number of queues per worker
-    kmp_uint64 last_q; //Used for load balancing
-	  kmp_uint64 last_q_accessed;
-		kmp_int32 last_numa_zone = 0;
-		kmp_int32 num_numa_done = 0;
-		bool numa_done = false;
-		//volatile bool is_allocated = false;
-		//bool found_first_task = false;
+  kmp_taskq_t **td_task_q; //Queue for tasks  
+  kmp_uint32 num_queues; //Number of queues per worker
+  kmp_uint64 last_q; //Used for load balancing
+  kmp_uint64 last_q_accessed;
+  kmp_int32 last_numa_zone = 0;
+  kmp_int32 num_numa_done = 0;
+  bool numa_done = false;
+  void* last_parent = NULL;
+  kmp_uint64 child_count = 0;
+  kmp_uint64 last_target;
+  //volatile bool is_allocated = false;
+  //bool found_first_task = false;
 #else
   kmp_taskdata_t *
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
