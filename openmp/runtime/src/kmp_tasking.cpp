@@ -381,12 +381,12 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   kmp_int32 target_tid;
   kmp_uint64 my_numa = gtid / task_team->tt.tt_num_cores_per_zone;
 
-  if (thread_data->td.last_numa_zone == -1)
+  /*if (thread_data->td.last_numa_zone == -1)
     thread_data->td.last_numa_zone = my_numa;
-
+  */
   if (thread_data->td.last_parent != taskdata->td_parent ||
-      task_team->tt.tt_num_numa_zones == 1 ||
-      thread_data->td.last_numa_zone == my_numa) {
+      task_team->tt.tt_num_numa_zones == 1) {// ||
+    //thread_data->td.last_numa_zone == my_numa) {
     //first child in this level
     thread_data->td.child_count = 1;
     thread_data->td.last_parent = taskdata->td_parent;
@@ -398,7 +398,8 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   else {
     thread_data->td.child_count++;
     //enqueue to next numa zone, may be use the master queues for this?
-    target_tid = (gtid % task_team->tt.tt_num_cores_per_zone) + (thread_data->td.last_numa_zone * task_team->tt.tt_num_cores_per_zone);
+    //target_tid = (gtid % task_team->tt.tt_num_cores_per_zone) + (thread_data->td.last_numa_zone * task_team->tt.tt_num_cores_per_zone);
+    target_tid = gtid + task_team->tt.tt_num_cores_per_zone;
     last_q = 0;
     target_tid = (target_tid > task_team->tt.tt_nproc - 1) ? target_tid % task_team->tt.tt_nproc : target_tid;
     thread_data->td.last_parent = taskdata->td_parent;
@@ -508,9 +509,9 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 	//__sync_bool_compare_and_swap(&task_q->has_items, 0, 1);
 
   KA_TRACE(1, ("__kmp_push_task: T#%d returning TASK_SUCCESSFULLY_PUSHED to T#%d: "
-                "task=%p head=%u last_q=%u, last_numa_zone=%u\n",
+	       "task=%p head=%u last_q=%u\n",//, last_numa_zone=%u\n",
                 gtid, target_tid, taskdata, target_thread_data->td.td_task_q[last_q]->td_deque_head,
-	       last_q, thread_data->td.last_numa_zone));
+	       last_q));//, thread_data->td.last_numa_zone));
   
   if (thread_data->td.num_queues > 1) {
     /*    if (task_team->root_tid == gtid && !thread_data->td.numa_done) {
@@ -520,11 +521,11 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
       thread_data->td.num_numa_done++;
       if (thread_data->td.num_numa_done == task_team->tt.tt_num_numa_zones)
       thread_data->td.numa_done = true;*/
-    if (thread_data->td.child_count == 1 || thread_data->td.last_numa_zone == my_numa) {
+    if (thread_data->td.child_count == 1) { // || thread_data->td.last_numa_zone == my_numa) {
       last_q++;
       thread_data->td.last_q = (last_q < thread_data->td.num_queues) ? last_q : 1;
     }
-    thread_data->td.last_numa_zone = (thread_data->td.last_numa_zone + 1) % task_team->tt.tt_num_numa_zones;
+    //thread_data->td.last_numa_zone = (thread_data->td.last_numa_zone + 1) % task_team->tt.tt_num_numa_zones;
   }
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
@@ -3430,7 +3431,7 @@ static void __kmp_alloc_task_q(kmp_info_t *thread,
     
   thread_data->td.last_q = 1; //initialize to next core for task distribution, so we can keep queue 0 free for numa load balancing.  
   thread_data->td.last_q_accessed = 0;
-  thread_data->td.last_numa_zone = -1;
+  //thread_data->td.last_numa_zone = -1;
 	KA_TRACE(10, ("__kmp_alloc_task_q: T#%d allocating deques[%d,%d] for thread_data %p\n",
           __kmp_gtid_from_thread(thread), __kmp_num_task_queues, INITIAL_TASK_DEQUE_SIZE,
           thread_data));

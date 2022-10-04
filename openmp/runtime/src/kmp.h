@@ -2335,7 +2335,7 @@ typedef struct kmp_base_thread_data {
   kmp_uint32 num_queues; //Number of queues per worker
   kmp_uint64 last_q; //Used for load balancing
   kmp_uint64 last_q_accessed;
-  kmp_int32 last_numa_zone = 0;
+  //kmp_int32 last_numa_zone = 0;
   kmp_int32 num_numa_done = 0;
   bool numa_done = false;
   void* last_parent = NULL;
@@ -2358,7 +2358,7 @@ typedef struct kmp_base_thread_data {
 #endif // BUILD_TIED_TASK_STACK
 } kmp_base_thread_data_t;
 
-#define TASK_DEQUE_BITS 8 // Used solely to define INITIAL_TASK_DEQUE_SIZE
+#define TASK_DEQUE_BITS 4 // Used solely to define INITIAL_TASK_DEQUE_SIZE
 #define INITIAL_TASK_DEQUE_SIZE (1 << TASK_DEQUE_BITS)
 
 #define TASK_DEQUE_SIZE(td) ((td).td_deque_size)
