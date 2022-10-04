@@ -2340,7 +2340,6 @@ typedef struct kmp_base_thread_data {
   bool numa_done = false;
   void* last_parent = NULL;
   kmp_uint64 child_count = 0;
-  kmp_uint64 last_target;
   //volatile bool is_allocated = false;
   //bool found_first_task = false;
 #else
