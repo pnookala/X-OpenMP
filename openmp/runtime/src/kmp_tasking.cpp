@@ -387,7 +387,6 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   if (thread_data->td.last_parent == taskdata->td_parent) {
     last_q = 0; //put it in self queue, since we gave the prior task(s) to the other workers.
   }
-  else thread_data->td.last_parent = taskdata->td_parent;
   
   kmp_uint64 target_tid = gtid + last_q;
   
@@ -497,6 +496,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
       thread_data->td.last_q = last_q;
     else
       thread_data->td.last_q = 0;
+    thread_data->td.last_parent = taskdata->td_parent;//update the parent for next task
   }
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;

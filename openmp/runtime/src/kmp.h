@@ -41,7 +41,7 @@ static __inline__ ticks getticks(void) {
 }
 
 
-//#define KMP_USE_XQUEUE 1
+#define KMP_USE_XQUEUE 1
 //#define KMP_USE_PAPI 1
 
 
