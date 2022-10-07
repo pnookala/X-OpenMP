@@ -2359,6 +2359,7 @@ typedef struct kmp_base_thread_data {
     kmp_uint32 num_queues; //Number of queues per worker
     kmp_uint64 last_q; //Used for load balancing
 	kmp_uint64 last_q_accessed;
+  void* last_parent = NULL;
 		//volatile bool is_allocated = false;
 		//bool found_first_task = false;
 #else

@@ -383,6 +383,12 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 #ifdef KMP_USE_XQUEUE
   //kmp_uint64 target_tid = __kmp_get_random_from_ticks(thread) % (task_team->tt.tt_nproc - 1);
   kmp_uint64 last_q = thread_data->td.last_q;
+
+  if (thread_data->td.last_parent == taskdata->td_parent) {
+    last_q = 0; //put it in self queue, since we gave the prior task(s) to the other workers.
+  }
+  else thread_data->td.last_parent = taskdata->td_parent;
+  
   kmp_uint64 target_tid = gtid + last_q;
   
   target_tid = (target_tid > task_team->tt.tt_nproc - 1) ? 
@@ -485,13 +491,13 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
                 gtid, target_tid, taskdata, target_thread_data->td.td_task_q[last_q]->td_deque_head,
                 last_q));
   
-  if (thread_data->td.num_queues > 1) {
-      last_q++;
-      if (last_q < thread_data->td.num_queues)
-			  thread_data->td.last_q = last_q;
-      else
-        thread_data->td.last_q = 0;
-	}
+  if (thread_data->td.num_queues > 1 && thread_data->td.last_parent != taskdata->td_parent) {
+    last_q++;
+    if (last_q < thread_data->td.num_queues)
+      thread_data->td.last_q = last_q;
+    else
+      thread_data->td.last_q = 0;
+  }
 #else
   thread_data->td.td_deque[thread_data->td.td_deque_tail] = taskdata;
   thread_data->td.td_deque_tail = 
