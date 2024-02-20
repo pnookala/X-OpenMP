@@ -235,6 +235,7 @@ int __kmp_get_global_thread_id_reg() {
     __kmp_acquire_bootstrap_lock(&__kmp_initz_lock);
     if (!__kmp_init_serial) {
       __kmp_do_serial_initialize();
+      KA_TRACE(10, ("__kmp_get_global_thread_id_reg: After __kmp_do_serial_initialize: __kmp_init_gtid = %d\n", __kmp_init_gtid));
       gtid = __kmp_gtid_get_specific();
     } else {
       gtid = __kmp_register_root(FALSE);
@@ -1433,7 +1434,7 @@ int __kmp_fork_call(ident_t *loc, int gtid,
     if (!TCR_4(__kmp_init_parallel))
       __kmp_parallel_initialize();
     __kmp_resume_if_soft_paused();
-
+    KA_TRACE(10, ("__kmp_fork_call: after __kmp_parallel_initialize\n"));
     /* setup current data */
     master_th = __kmp_threads[gtid]; // AC: potentially unsafe, not in sync with
     // shutdown
@@ -3760,8 +3761,19 @@ int __kmp_register_root(int initial_thread) {
 #ifdef KMP_TDATA_GTID
   __kmp_gtid = gtid;
 #endif
+
+
+
   __kmp_create_worker(gtid, root_thread, __kmp_stksize);
   KMP_DEBUG_ASSERT(__kmp_gtid_get_specific() == gtid);
+
+  #if KMP_USE_NUMA_DLB
+  /* numa-dlb: query numa information before creating root worker thread
+  2024-2-9: For first iter. we can hardcode the binding without querying numa information.
+  For second iter. we can query numa information once
+  */
+  //TODO: let the root thread
+  #endif
 
   KA_TRACE(20, ("__kmp_register_root: T#%d init T#%d(%d:%d) arrived: join=%u, "
                 "plain=%u\n",
@@ -3830,7 +3842,7 @@ int __kmp_register_root(int initial_thread) {
 
   KMP_MB();
   __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
-
+  KA_TRACE(10, ("__kmp_register_root: exit: T#%d\n", gtid));
   return gtid;
 }
 
@@ -6704,7 +6716,7 @@ static void __kmp_do_serial_initialize(void) {
 
   /* setup the uber master thread and hierarchy */
   gtid = __kmp_register_root(TRUE);
-  KA_TRACE(10, ("__kmp_do_serial_initialize  T#%d\n", gtid));
+  KA_TRACE(10, ("__kmp_do_serial_initialize: T#%d\n", gtid));
   KMP_ASSERT(KMP_UBER_GTID(gtid));
   KMP_ASSERT(KMP_INITIAL_GTID(gtid));
 

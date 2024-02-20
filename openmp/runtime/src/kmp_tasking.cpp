@@ -342,7 +342,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   kmp_thread_data_t *thread_data;
 
   KA_TRACE(20,
-           ("__kmp_push_task: T#%d trying to push task %p.\n", gtid, taskdata));
+           ("__kmp_push_task: T#%d trying to push task %p at cpu(%d).\n", gtid, taskdata, sched_getcpu() ));
 
   if (taskdata->td_flags.tiedness == TASK_UNTIED) {
     // untied task needs to increment counter so that the task structure is not
@@ -427,7 +427,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
         __kmp_task_is_allowed(gtid, __kmp_task_stealing_constraint, taskdata,
                               thread->th.th_current_task)) {
 #endif
-      KA_TRACE(1, ("__kmp_push_task: T#%d deque is full; returning "
+      KA_TRACE(10, ("__kmp_push_task: T#%d deque is full; returning "
                     "TASK_NOT_PUSHED for task %p\n",
                     gtid, taskdata));
       return TASK_NOT_PUSHED;
@@ -3411,9 +3411,9 @@ static void __kmp_alloc_task_q(kmp_info_t *thread,
   thread_data->td.last_q = 0; //initialize to self for task distribution  
 	thread_data->td.last_q_accessed = 0;
 
-  KA_TRACE(10, ("__kmp_alloc_task_q: T#%d allocating deques[%d,%d] for thread_data %p\n",
+  KA_TRACE(10, ("__kmp_alloc_task_q: T#%d allocating deques[%d,%d] for thread_data %p at cpu(%d)\n",
           __kmp_gtid_from_thread(thread), __kmp_num_task_queues, INITIAL_TASK_DEQUE_SIZE,
-          thread_data));
+          thread_data, sched_getcpu()));
 
   thread_data->td.td_task_q = (kmp_taskq_t **) __kmp_allocate(
       thread_data->td.num_queues * sizeof(kmp_taskq_t *));

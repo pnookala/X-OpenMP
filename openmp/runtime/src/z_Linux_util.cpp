@@ -897,7 +897,7 @@ void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
-  KA_TRACE(10, ("__kmp_create_worker: done creating thread (%d)\n", gtid));
+  KA_TRACE(10, ("__kmp_create_worker: done creating thread (%d), cpu (%d)\n", gtid, sched_getcpu()));
 
 } // __kmp_create_worker
 

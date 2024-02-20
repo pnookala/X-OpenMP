@@ -43,6 +43,12 @@ static __inline__ ticks getticks(void) {
 
 #define KMP_USE_XQUEUE 1
 //#define KMP_USE_PAPI 1
+#define KMP_USE_NUMA_DLB 1 // numa-dlb: Use NUMA-aware dynamic load balancing
+#if KMP_USE_NUMA_DLB
+#if !KMP_USE_HWLOC // numa-dlb: force use kmp_hwloc
+#define KMP_USE_HWLOC 1
+#endif
+#endif
 
 
 #ifdef KMP_USE_PAPI
@@ -2366,6 +2372,12 @@ typedef struct kmp_base_thread_data {
       *td_deque; // Deque of tasks encountered by td_thr, dynamically allocated
   kmp_uint32 td_deque_head; // Head of deque (will wrap)
   kmp_uint32 td_deque_tail; // Tail of deque (will wrap)
+#endif
+
+#ifdef KMP_USE_NUMA_DLB
+
+  unsigned long td_numa_id; // NUMA node id
+
 #endif
   kmp_int32 td_deque_size; // Size of deck
   kmp_int32 td_deque_ntasks; // Number of tasks in deque
