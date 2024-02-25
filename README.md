@@ -1,3 +1,11 @@
+This code base contains X-OpenMP implementation on top of the LLVM OpenMP implementation. 
+
+Following are the branches which contain code for the implementations in the paper titled "X-OpenMP – eXtreme fine-grained tasking using lock-less work stealing".
+
+master: OpenMP using XQueue (static round-robin load balancing)
+workstealing: OpenMP using XQueue and Lock-less Wait-based Workstealing.
+workstealing-nowait: OpenMP using XQueue and Lock-less No-wait Based Workstealing.
+
 # The LLVM Compiler Infrastructure
 
 This directory and its sub-directories contain source code for LLVM,
